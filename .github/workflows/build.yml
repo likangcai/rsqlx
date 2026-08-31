@@ -213,9 +213,15 @@ jobs:
               else
                 # No-container musl build (aarch64 on arm64 runner): maturin's
                 # interpreter auto-discovery fails here, so pin the setup-python
-                # interpreter explicitly with -i.
-                INTERP="$(python -c 'import sys; print(sys.executable)')"
-                $MATURIN build $BASE_ARGS -i "$INTERP" --zig --compatibility musllinux_1_2
+                # interpreter explicitly with -i. maturin needs a VERSIONED name
+                # (python3.13) to infer the ABI — the bare 'python' it skips.
+                PY_BIN="$(python -c 'import sys; print(sys.executable)')"
+                PY_DIR="$(dirname "$PY_BIN")"
+                VER_INT="python${{ matrix.python }}"
+                if [ ! -x "$PY_DIR/$VER_INT" ]; then
+                  ln -sf "$PY_BIN" "$PY_DIR/$VER_INT"
+                fi
+                $MATURIN build $BASE_ARGS -i "$PY_DIR/$VER_INT" --zig --compatibility musllinux_1_2
               fi
               ;;
             *)
