@@ -81,25 +81,23 @@ jobs:
             container: quay.io/pypa/musllinux_1_2_x86_64
             python: "3.13"
             target: x86_64-unknown-linux-musl
-          # ── Linux aarch64 musllinux (native arm64 runner + aarch64 musllinux container) ──
+          # ── Linux aarch64 musllinux (native arm64 runner, built with zig) ──
+          # No Alpine container here: GH Actions JS steps (checkout/setup-python/
+          # upload-artifact) cannot run inside an Alpine container on arm64 runners.
+          # maturin --zig links against musl natively on the arm64 runner instead.
           - os: ubuntu-24.04-arm
-            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.9"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
-            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.10"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
-            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.11"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
-            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.12"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
-            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.13"
             target: aarch64-unknown-linux-musl
           # ── Windows x86_64 (no container) ──
@@ -159,10 +157,11 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
-      # Linux (manylinux/musllinux containers): use pre-installed Python
-      # Windows / macOS: use setup-python action
+      # Container rows (manylinux + x86_64 musllinux): use the pre-installed
+      # Python inside the image. No-container rows (Windows/macOS/aarch64 musllinux):
+      # use the setup-python action.
       - name: Set up Python (Linux container)
-        if: runner.os == 'Linux'
+        if: ${{ matrix.container }}
         shell: bash
         run: |
           PY_VER="${{ matrix.python }}"
@@ -170,48 +169,52 @@ jobs:
           echo "PYTHON=/opt/python/cp${PY_NODOT}-cp${PY_NODOT}/bin/python" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
-        if: runner.os != 'Linux'
+        if: ${{ !matrix.container }}
         with:
           python-version: ${{ matrix.python }}
 
       - name: Install maturin
         shell: bash
         run: |
+          # maturin[zig] provides the `zig` helper maturin needs for `--zig` musl builds.
           if [ -n "${PYTHON:-}" ]; then
             $PYTHON -m pip install --upgrade pip
-            $PYTHON -m pip install maturin
+            $PYTHON -m pip install "maturin[zig]"
           else
             python -m pip install --upgrade pip
-            python -m pip install maturin
+            python -m pip install "maturin[zig]"
           fi
 
       - name: Build wheel
         shell: bash
         run: |
           BASE_ARGS="--release --target ${{ matrix.target }} --out dist --strip"
-          # Use explicit interpreter path for Linux containers, auto-detect for Win/Mac
+          # Containers: invoke maturin via the image Python (its bin dir is NOT on PATH).
+          # No-container rows: invoke via `python -m maturin` (setup-python python, reliable).
           if [ -n "${PYTHON:-}" ]; then
             BASE_ARGS="$BASE_ARGS -i $PYTHON"
-            # Inside containers: pip puts binaries in Python's bin dir which is NOT
-            # on the default PATH — invoke via python -m maturin instead.
             MATURIN="$PYTHON -m maturin"
           else
-            MATURIN=maturin
+            MATURIN="python -m maturin"
           fi
-          # manylinux/musllinux containers bundle the right toolchain and the
-          # matching-architecture Python, so builds are native (no zig needed).
-          # We tag each wheel with the SAME manylinux/musllinux version as the
-          # build container — auditwheel rejects re-tagging to an OLDER glibc
-          # (e.g. a 2_28-built wheel cannot be tagged manylinux_2_17).
-          case "${{ matrix.container }}" in
-            *manylinux*)
+          # manylinux glibc containers: native build, tag with the SAME manylinux
+          # version as the container (auditwheel rejects re-tagging to an OLDER glibc).
+          # musllinux: x86_64 builds inside the Alpine container on x64; aarch64 builds
+          # natively on the arm64 runner via `maturin --zig` (no Alpine container, since
+          # GH Actions JS steps can't run in an Alpine container on arm64).
+          # Windows / macOS: native build, no compatibility flag needed.
+          case "${{ matrix.target }}" in
+            *linux-gnu)
               $MATURIN build $BASE_ARGS --compatibility manylinux_2_28
               ;;
-            *musllinux*)
-              $MATURIN build $BASE_ARGS --compatibility musllinux_1_2
+            *linux-musl)
+              if [ -n "${PYTHON:-}" ]; then
+                $MATURIN build $BASE_ARGS --compatibility musllinux_1_2
+              else
+                $MATURIN build $BASE_ARGS --zig --compatibility musllinux_1_2
+              fi
               ;;
             *)
-              # Windows / macOS: native build, no compatibility flag needed
               $MATURIN build $BASE_ARGS
               ;;
           esac
