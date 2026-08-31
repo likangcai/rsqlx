@@ -13,61 +13,80 @@ jobs:
   build-wheels:
     name: Build ${{ matrix.os }} / CPython ${{ matrix.python }} / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64
+          # ── Linux x86_64 glibc (native in manylinux_2_28 container) ──
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.9"
             target: x86_64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.10"
             target: x86_64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.11"
             target: x86_64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.12"
             target: x86_64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.13"
             target: x86_64-unknown-linux-gnu
-            manylinux: "2_28"
-          # Linux aarch64 (glibc)
+          # ── Linux aarch64 glibc (cross-compile from x86_64 manylinux) ──
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.9"
             target: aarch64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.10"
             target: aarch64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.11"
             target: aarch64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.12"
             target: aarch64-unknown-linux-gnu
-            manylinux: "2_28"
           - os: ubuntu-22.04
+            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.13"
             target: aarch64-unknown-linux-gnu
-            manylinux: "2_28"
-          # Linux x86_64 musllinux (Alpine / Docker, musl libc)
+          # ── Linux x86_64 musllinux (Alpine-compatible, musl libc) ──
           - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
+            python: "3.9"
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
+            python: "3.10"
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
+            python: "3.11"
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
+            python: "3.12"
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
             python: "3.13"
             target: x86_64-unknown-linux-musl
-          # Linux aarch64 musllinux (Alpine ARM / Docker)
+          # ── Linux aarch64 musllinux (cross-compile from x86_64 musllinux) ──
           - os: ubuntu-22.04
+            container: quay.io/pypa/musllinux_1_2_x86_64
             python: "3.13"
             target: aarch64-unknown-linux-musl
-          # Windows x86_64
+          # ── Windows x86_64 (no container) ──
           - os: windows-latest
             python: "3.9"
             target: x86_64-pc-windows-msvc
@@ -83,7 +102,7 @@ jobs:
           - os: windows-latest
             python: "3.13"
             target: x86_64-pc-windows-msvc
-          # macOS x86_64 (Intel)
+          # ── macOS x86_64 Intel (no container) ──
           - os: macos-13
             python: "3.9"
             target: x86_64-apple-darwin
@@ -99,7 +118,7 @@ jobs:
           - os: macos-13
             python: "3.13"
             target: x86_64-apple-darwin
-          # macOS aarch64 (Apple Silicon)
+          # ── macOS aarch64 Apple Silicon (no container) ──
           - os: macos-14
             python: "3.9"
             target: aarch64-apple-darwin
@@ -124,31 +143,37 @@ jobs:
       - name: Install Rust target
         run: rustup target add ${{ matrix.target }}
 
+      # Linux (manylinux/musllinux containers): use pre-installed Python
+      # Windows / macOS: use setup-python action
+      - name: Set up Python (Linux container)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          PY_VER="${{ matrix.python }}"
+          PY_NODOT="${PY_VER//.}"
+          echo "PYTHON=/opt/python/cp${PY_NODOT}-cp${PY_NODOT}/bin/python" >> "$GITHUB_ENV"
+
       - uses: actions/setup-python@v5
+        if: runner.os != 'Linux'
         with:
           python-version: ${{ matrix.python }}
 
       - name: Install maturin
+        shell: bash
         run: pip install maturin
-
-      # Linux aarch64 (glibc) AND musllinux builds use zig as the C toolchain
-      # NOTE: macOS aarch64 does NOT need zig — the runner is natively ARM
-      - name: Install zig (Linux cross-compile / musl)
-        if: matrix.os == 'ubuntu-22.04' && (matrix.target == 'aarch64-unknown-linux-gnu' || contains(matrix.target, 'musl'))
-        run: pip install ziglang
 
       - name: Build wheel
         shell: bash
         run: |
-          BASE_ARGS="--release --target ${{ matrix.target }} -i python${{ matrix.python }} --out dist"
-          # zig ONLY for Linux aarch64 cross-compile and musl targets
-          # macOS aarch64 runners are natively ARM — never pass --zig
-          if [[ "${{ matrix.target }}" == *linux-gnu*aarch64* ]] || [[ "${{ matrix.target }}" == *musl* ]]; then
-            BASE_ARGS="$BASE_ARGS --zig"
+          BASE_ARGS="--release --target ${{ matrix.target }} --out dist --strip"
+          # Use explicit interpreter path for Linux containers, auto-detect for Win/Mac
+          if [ -n "${PYTHON:-}" ]; then
+            BASE_ARGS="$BASE_ARGS -i $PYTHON"
           fi
-          if [ -n "${{ matrix.manylinux }}" ]; then
-            # Build with manylinux_2_28 primary tag, re-tag for 2_17
-            maturin build $BASE_ARGS --manylinux ${{ matrix.manylinux }}
+          # Determine manylinux tag based on container type
+          if [[ "${{ matrix.container }}" == *manylinux* ]]; then
+            # manylinux_2_28 container → build with 2_28 tag, re-tag for 2_17
+            maturin build $BASE_ARGS --manylinux 2_28
             maturin build $BASE_ARGS --manylinux 2_17
           else
             # Windows / macOS / musllinux: single build
@@ -165,14 +190,15 @@ jobs:
   build-sdist:
     name: Build sdist
     runs-on: ubuntu-22.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install maturin
-      - run: maturin sdist --out dist
+      - name: Build sdist
+        shell: bash
+        run: |
+          pip install maturin
+          maturin sdist --out dist
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
