@@ -160,7 +160,14 @@ jobs:
 
       - name: Install maturin
         shell: bash
-        run: pip install maturin
+        run: |
+          if [ -n "${PYTHON:-}" ]; then
+            $PYTHON -m pip install --upgrade pip
+            $PYTHON -m pip install maturin
+          else
+            python -m pip install --upgrade pip
+            python -m pip install maturin
+          fi
 
       - name: Build wheel
         shell: bash
@@ -197,8 +204,9 @@ jobs:
       - name: Build sdist
         shell: bash
         run: |
-          pip install maturin
-          maturin sdist --out dist
+          /opt/python/cp313-cp313/bin/python -m pip install --upgrade pip
+          /opt/python/cp313-cp313/bin/python -m pip install maturin
+          /opt/python/cp313-cp313/bin/python -m maturin sdist --out dist
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
