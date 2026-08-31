@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Test ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows, macOS, Linux × Python 3.9–3.13
+        os: [ubuntu-22.04, windows-latest, macos-14]
+        python: ["3.9", "3.11", "3.13"]
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install maturin & test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin pytest psycopg2-binary pymysql
+
+      - name: Build and install rsqlx (debug for speed)
+        run: maturin develop --skip-install
+
+      - name: Run SQLite tests
+        run: python -m pytest tests/test_sqlite.py -v
+
+      - name: Run PostgreSQL cross-validation
+        env:
+          RSQLX_TEST_PG_URL: postgres://postgres@127.0.0.1:5432/postgres
+        run: python tests/verify_pg.py
+
+      - name: Run MySQL cross-validation
+        env:
+          RSQLX_TEST_MYSQL_URL: mysql://root:root@127.0.0.1:3306/testdb
+        run: python tests/verify_mysql.py

@@ -1,0 +1,151 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  # ----- build wheels for Windows / macOS / Linux ---------------------------
+  build-wheels:
+    name: Build ${{ matrix.os }} / CPython ${{ matrix.python }} / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-22.04
+            python: "3.9"
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.10"
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.11"
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.12"
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.13"
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+          # Linux aarch64
+          - os: ubuntu-22.04
+            python: "3.13"
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          # Windows x86_64
+          - os: windows-latest
+            python: "3.9"
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            python: "3.10"
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            python: "3.11"
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            python: "3.12"
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            python: "3.13"
+            target: x86_64-pc-windows-msvc
+          # macOS
+          - os: macos-13
+            python: "3.13"
+            target: x86_64-apple-darwin
+          - os: macos-14
+            python: "3.13"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.12"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.11"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.10"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.9"
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      # Linux cross-compile for aarch64 uses zig as the C toolchain
+      - name: Install zig (Linux aarch64 only)
+        if: matrix.os == 'ubuntu-22.04' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: pip install ziglang
+
+      - name: Build wheel
+        shell: bash
+        run: |
+          ARGS="--release --target ${{ matrix.target }} --out dist"
+          if [ -n "${{ matrix.manylinux }}" ]; then
+            ARGS="$ARGS --manylinux ${{ matrix.manylinux }}"
+          fi
+          if [ "${{ matrix.os }}" = "ubuntu-22.04" ] && [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            ARGS="$ARGS --zig"
+          fi
+          maturin build $ARGS
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.target }}
+          path: dist/*.whl
+
+  # ----- sdist ----------------------------------------------------------------
+  build-sdist:
+    name: Build sdist
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install maturin
+      - run: maturin sdist --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*
+
+  # ----- publish on tag -------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: [build-wheels, build-sdist]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1

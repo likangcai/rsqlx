@@ -1,0 +1,10 @@
+/target
+/dist
+__pycache__/
+*.pyc
+*.pyd
+.venv/
+*.egg-info/
+.pytest_cache/
+.idea/
+.vscode/
