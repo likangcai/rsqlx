@@ -330,17 +330,17 @@ pub trait DbExt: Database + Sized
 where
     Self::Row: Send,
     Self::QueryResult: Send,
-    for<'q> <Self as Database>::Arguments<'q>: sqlx::IntoArguments<'q, Self>,
+    Self::Arguments: sqlx::IntoArguments<Self>,
 {
     fn bind_param<'q>(
-        q: Query<'q, Self, <Self as Database>::Arguments<'q>>,
+        q: Query<'q, Self, <Self as Database>::Arguments>,
         p: &PyParam,
-    ) -> Query<'q, Self, <Self as Database>::Arguments<'q>>;
+    ) -> Query<'q, Self, <Self as Database>::Arguments>;
 
     /// Push a single parameter as a bind value onto a `Separated` builder
     /// (used by `QueryBuilder::push_values` for batch INSERTs).
     fn push_bind(
-        sep: &mut sqlx::query_builder::Separated<'_, '_, Self, &'static str>,
+        sep: &mut sqlx::query_builder::Separated<'_, Self, &'static str>,
         p: &PyParam,
     );
 
@@ -350,9 +350,9 @@ where
 
 impl DbExt for Postgres {
     fn bind_param<'q>(
-        q: Query<'q, Postgres, <Postgres as Database>::Arguments<'q>>,
+        q: Query<'q, Postgres, <Postgres as Database>::Arguments>,
         p: &PyParam,
-    ) -> Query<'q, Postgres, <Postgres as Database>::Arguments<'q>> {
+    ) -> Query<'q, Postgres, <Postgres as Database>::Arguments> {
         match p {
             PyParam::Null => q.bind(PgUntypedNull),
             PyParam::Bool(v) => q.bind(*v),
@@ -382,7 +382,7 @@ impl DbExt for Postgres {
     }
 
     fn push_bind(
-        sep: &mut sqlx::query_builder::Separated<'_, '_, Postgres, &'static str>,
+        sep: &mut sqlx::query_builder::Separated<'_, Postgres, &'static str>,
         p: &PyParam,
     ) {
         match p {
@@ -417,9 +417,9 @@ impl DbExt for Postgres {
 /// elements must share that type (or be `Null`). Heterogeneous arrays raise
 /// a `TypeError` and should instead be passed as JSON.
 fn pg_bind_array<'q>(
-    q: Query<'q, Postgres, <Postgres as Database>::Arguments<'q>>,
+    q: Query<'q, Postgres, <Postgres as Database>::Arguments>,
     items: &[PyParam],
-) -> Query<'q, Postgres, <Postgres as Database>::Arguments<'q>> {
+) -> Query<'q, Postgres, <Postgres as Database>::Arguments> {
     // Find the first non-null element to decide the array element type.
     let kind = items.iter().find(|p| !matches!(p, PyParam::Null)).cloned();
     match kind {
@@ -447,10 +447,10 @@ fn pg_bind_array<'q>(
 }
 
 fn bind_array_t<'q, T>(
-    q: Query<'q, Postgres, <Postgres as Database>::Arguments<'q>>,
+    q: Query<'q, Postgres, <Postgres as Database>::Arguments>,
     items: &[PyParam],
     extract: impl Fn(&PyParam) -> Option<T>,
-) -> Query<'q, Postgres, <Postgres as Database>::Arguments<'q>>
+) -> Query<'q, Postgres, <Postgres as Database>::Arguments>
 where
     T: 'q + sqlx::Encode<'q, Postgres> + sqlx::Type<Postgres> + sqlx::postgres::PgHasArrayType,
 {
@@ -519,9 +519,9 @@ impl<'q> sqlx::Encode<'q, Postgres> for PgUntypedNull {
 
 impl DbExt for MySql {
     fn bind_param<'q>(
-        q: Query<'q, MySql, <MySql as Database>::Arguments<'q>>,
+        q: Query<'q, MySql, <MySql as Database>::Arguments>,
         p: &PyParam,
-    ) -> Query<'q, MySql, <MySql as Database>::Arguments<'q>> {
+    ) -> Query<'q, MySql, <MySql as Database>::Arguments> {
         match p {
             PyParam::Null => q.bind(Option::<String>::None),
             PyParam::Bool(v) => q.bind(*v),
@@ -555,7 +555,7 @@ impl DbExt for MySql {
     }
 
     fn push_bind(
-        sep: &mut sqlx::query_builder::Separated<'_, '_, MySql, &'static str>,
+        sep: &mut sqlx::query_builder::Separated<'_, MySql, &'static str>,
         p: &PyParam,
     ) {
         match p {
@@ -586,9 +586,9 @@ impl DbExt for MySql {
 
 impl DbExt for Sqlite {
     fn bind_param<'q>(
-        q: Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>>,
+        q: Query<'q, Sqlite, <Sqlite as Database>::Arguments>,
         p: &PyParam,
-    ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments<'q>> {
+    ) -> Query<'q, Sqlite, <Sqlite as Database>::Arguments> {
         match p {
             PyParam::Null => q.bind(Option::<String>::None),
             PyParam::Bool(v) => q.bind(*v),
@@ -623,7 +623,7 @@ impl DbExt for Sqlite {
     }
 
     fn push_bind(
-        sep: &mut sqlx::query_builder::Separated<'_, '_, Sqlite, &'static str>,
+        sep: &mut sqlx::query_builder::Separated<'_, Sqlite, &'static str>,
         p: &PyParam,
     ) {
         match p {
@@ -656,7 +656,7 @@ pub fn rows_to_list<DB>(py: Python<'_>, rows: Vec<DB::Row>) -> PyResult<Py<PyLis
 where
     DB: DbExt,
     DB::Row: Send,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
 {
     let list = PyList::empty(py);
     for row in &rows {
@@ -676,11 +676,11 @@ pub async fn pool_fetch_rows<DB>(
 ) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let rows = crate::runtime::run_db_task(async move {
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -697,11 +697,11 @@ pub async fn pool_fetch_optional<DB>(
 ) -> PyResult<Option<Py<PyDict>>>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let row = crate::runtime::run_db_task(async move {
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -721,11 +721,11 @@ pub async fn pool_execute<DB>(
 ) -> PyResult<(u64, Option<i64>)>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let res = crate::runtime::run_db_task(async move {
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -742,7 +742,7 @@ pub async fn pool_execute_many<DB>(
 ) -> PyResult<(u64, Option<i64>)>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     // Optimisation: detect INSERT ... VALUES (...) and batch into a single
@@ -759,7 +759,7 @@ where
         let mut total: u64 = 0;
         let mut last_id = None;
         for set in &params {
-            let mut q = sqlx::query::<DB>(&sql);
+            let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
             for p in set {
                 q = DB::bind_param(q, p);
             }
@@ -828,7 +828,7 @@ async fn batch_insert<DB>(
 ) -> PyResult<(u64, Option<i64>)>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let res = crate::runtime::run_db_task(async move {
@@ -853,7 +853,7 @@ where
         // For MySQL/SQLite ? placeholders; for PostgreSQL we need $1, $2...
         let full_sql = rewrite_placeholders::<DB>(&full_sql, &params);
 
-        let mut q = sqlx::query::<DB>(&full_sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(full_sql.as_str()));
         for set in &params {
             for p in set {
                 q = DB::bind_param(q, p);
@@ -919,7 +919,7 @@ where
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     crate::runtime::run_db_task(async move {
-        sqlx::raw_sql(&sql).execute(&pool).await?;
+        sqlx::raw_sql(sqlx::AssertSqlSafe(sql)).execute(&pool).await?;
         Ok::<(), sqlx::Error>(())
     })
     .await
@@ -929,11 +929,11 @@ where
 pub async fn pool_fetch_raw<DB>(pool: Pool<DB>, sql: String) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let rows = crate::runtime::run_db_task(async move {
-        sqlx::raw_sql(&sql).fetch_all(&pool).await
+        sqlx::raw_sql(sqlx::AssertSqlSafe(sql)).fetch_all(&pool).await
     })
     .await?;
     Python::with_gil(|py| rows_to_list::<DB>(py, rows))
@@ -976,7 +976,7 @@ pub async fn tx_fetch_rows<DB>(
 ) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let rows = crate::runtime::run_db_task(async move {
@@ -984,7 +984,7 @@ where
         let t = guard
             .as_mut()
             .ok_or_else(crate::error::tx_finished)?;
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -1001,7 +1001,7 @@ pub async fn tx_fetch_optional<DB>(
 ) -> PyResult<Option<Py<PyDict>>>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let row = crate::runtime::run_db_task(async move {
@@ -1009,7 +1009,7 @@ where
         let t = guard
             .as_mut()
             .ok_or_else(crate::error::tx_finished)?;
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -1029,7 +1029,7 @@ pub async fn tx_execute<DB>(
 ) -> PyResult<(u64, Option<i64>)>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     let res = crate::runtime::run_db_task(async move {
@@ -1037,7 +1037,7 @@ where
         let t = guard
             .as_mut()
             .ok_or_else(crate::error::tx_finished)?;
-        let mut q = sqlx::query::<DB>(&sql);
+        let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
         for p in &params {
             q = DB::bind_param(q, p);
         }
@@ -1054,7 +1054,7 @@ pub async fn tx_execute_many<DB>(
 ) -> PyResult<(u64, Option<i64>)>
 where
     DB: DbExt,
-    for<'q> <DB as Database>::Arguments<'q>: sqlx::IntoArguments<'q, DB>,
+    <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
     for<'c> &'c mut <DB as Database>::Connection: sqlx::Executor<'c, Database = DB>,
 {
     crate::runtime::run_db_task(async move {
@@ -1065,7 +1065,7 @@ where
         let mut total: u64 = 0;
         let mut last_id = None;
         for set in &params {
-            let mut q = sqlx::query::<DB>(&sql);
+            let mut q = sqlx::query::<DB>(sqlx::AssertSqlSafe(sql.as_str()));
             for p in set {
                 q = DB::bind_param(q, p);
             }

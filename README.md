@@ -55,53 +55,129 @@ maturin develop --release
 
 ## Quickstart
 
+All three databases share the same `connect()` / `Pool` / `Transaction` API.
+Connection strings follow the sqlx convention:
+
+```python
+# SQLite:     "sqlite:app.db" (file) or "sqlite::memory:" (in-memory) — placeholders: ?
+# PostgreSQL: "postgres://user:pass@localhost:5432/db"               — placeholders: $1, $2, ...
+# MySQL:      "mysql://user:pass@localhost:3306/db?ssl-mode=disabled" — placeholders: ?
+#             (add ?ssl-mode=disabled when the server's TLS is incompatible with rustls)
+import asyncio
+import rsqlx
+```
+
+### SQLite
+
 ```python
 import asyncio
 import rsqlx
 
 async def main():
-    # Connection strings follow the sqlx convention:
-    #   postgres://user:pass@host/db
-    #   mysql://user:pass@host/db
-    #   sqlite:path/to.db  or  sqlite::memory:
-    pool = await rsqlx.connect("sqlite:test.db", max_connections=5)
+    pool = await rsqlx.connect("sqlite::memory:", max_connections=5)
 
     await pool.execute(
-        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INT)"
+        "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INT)"
     )
 
-    # insert returns ExecuteResult
-    res = await pool.execute(
-        "INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]
-    )
-    print(res.rows_affected, res.last_insert_id)
+    # execute returns ExecuteResult(rows_affected, last_insert_id)
+    res = await pool.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30])
+    print(res.rows_affected, res.last_insert_id)            # 1 1
 
     # fetch returns list[dict]
     rows = await pool.fetch("SELECT * FROM users WHERE age > ?", [18])
+    print(rows)                                            # [{'id': 1, 'name': 'Alice', 'age': 30}]
 
-    # single-row queries
-    user = await pool.fetch_one("SELECT * FROM users WHERE id = ?", [1])
+    # single-row helpers
+    user  = await pool.fetch_one("SELECT * FROM users WHERE id = ?", [1])        # raises RowNotFound if no row
     maybe = await pool.fetch_optional("SELECT * FROM users WHERE id = ?", [99])  # None
 
-    # transactions — commit on exit, rollback on exception
+    # transaction: commit on normal exit, rollback on exception
     async with await pool.begin() as tx:
-        await tx.execute("UPDATE users SET age = ? WHERE id = ?", [31, 1])
         await tx.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Bob", 25])
-
-    # batch — INSERT is auto-rewritten to multi-row VALUES
-    await pool.execute_many(
-        "INSERT INTO users (name, age) VALUES (?, ?)",
-        [["Carol", 28], ["Dave", 40]],
-    )
-
-    # stored procedures and other statements unsupported by the prepared-statement protocol
-    await pool.execute_raw("DROP PROCEDURE IF EXISTS sp_demo")
-    await pool.execute_raw("CREATE PROCEDURE sp_demo(IN n VARCHAR(64)) BEGIN ... END")
-    await pool.execute("CALL sp_demo(?)", ["hello"])
 
     await pool.close()
 
 asyncio.run(main())
+```
+
+### PostgreSQL
+
+```python
+import asyncio
+import rsqlx
+
+async def main():
+    pool = await rsqlx.connect("postgres://user:pass@localhost:5432/db", max_connections=5)
+
+    await pool.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id SERIAL PRIMARY KEY, name TEXT, age INT, tags TEXT[])"
+    )
+
+    await pool.execute("INSERT INTO users (name, age) VALUES ($1, $2)", ["Alice", 30])
+
+    # homogeneous scalar lists bind as native PG arrays (None elements preserved)
+    await pool.execute(
+        "INSERT INTO users (name, age, tags) VALUES ($1, $2, $3)",
+        ["Bob", 25, ["python", "rust", None]],
+    )
+
+    user = await pool.fetch_one("SELECT * FROM users WHERE id = $1", [1])
+    print(user["tags"])                                    # ['python', 'rust', None]
+
+    # batch — single-row INSERT is auto-rewritten to a multi-row INSERT
+    await pool.execute_many(
+        "INSERT INTO users (name, age) VALUES ($1, $2)",
+        [["Carol", 28], ["Dave", 40]],
+    )
+
+    await pool.close()
+
+asyncio.run(main())
+```
+
+### MySQL
+
+```python
+import asyncio
+import rsqlx
+
+async def main():
+    # add ?ssl-mode=disabled when the server's TLS is incompatible with rustls
+    # (common with MySQL 8 default cipher configuration)
+    pool = await rsqlx.connect(
+        "mysql://user:pass@localhost:3306/db?ssl-mode=disabled", max_connections=5
+    )
+
+    await pool.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64), age INT)"
+    )
+
+    await pool.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30])
+    rows = await pool.fetch("SELECT * FROM users WHERE age > ?", [18])
+
+    # stored procedures, multi-statement scripts and other non-prepared
+    # statements use the raw protocol (execute_raw / fetch_raw)
+    await pool.execute_raw("DROP PROCEDURE IF EXISTS sp_hello")
+    await pool.execute_raw(
+        "CREATE PROCEDURE sp_hello(IN n VARCHAR(64)) BEGIN SELECT n; END"
+    )
+    await pool.execute("CALL sp_hello(?)", ["world"])
+
+    await pool.close()
+
+asyncio.run(main())
+```
+
+### Migrations
+
+```python
+# Run sqlx-style migration files from a directory (applied once, then idempotent):
+#   migrations/0001_init.up.sql
+#   migrations/0002_seed.up.sql
+await pool.migrate("migrations")
 ```
 
 ### Placeholders

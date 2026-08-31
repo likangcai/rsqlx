@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rsqlx"
-version = "0.1.1"
+version = "0.9.0"
 description = "Async PostgreSQL / MySQL / SQLite driver for Python, powered by Rust's sqlx"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -18,7 +18,6 @@ keywords = ["postgresql", "mysql", "sqlite", "asyncio", "database", "sqlx", "rus
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Database",
     "Topic :: Database :: Front-Ends",
     "Framework :: AsyncIO",

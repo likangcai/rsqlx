@@ -2,6 +2,20 @@
 
 本项目记录 rsqlx 的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.9.0] - 2026-08-31
+
+对齐上游 sqlx 版本号，便于长期维护与对照。
+
+### 变更
+
+- 依赖 `sqlx` 0.8.6 → 0.9.0；rsqlx 自身版本号同步对齐为 `0.9.0`（与上游 sqlx 主版本号保持一致，方便版本对照与问题排查）
+- 适配 sqlx 0.9 的破坏性 API 变更：
+  - `Database::Arguments` 关联类型移除生命周期参数（`Arguments<'q>` → `Arguments`）
+  - `Arguments` 与 `IntoArguments` trait 移除生命周期参数
+  - `query_builder::Separated` 减少一个生命周期参数
+  - `query()` / `raw_sql()` 新增 `SqlSafeStr` 约束，运行时动态 SQL 改用 `sqlx::AssertSqlSafe` 包裹
+- 功能不变：三库统一接口、参数/行类型映射、批量多值 INSERT、事务、迁移、原生查询等保持原有行为
+
 ## [0.1.1] - 2026-08-31
 
 许可布局对齐上游 sqlx。

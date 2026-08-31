@@ -256,15 +256,15 @@ def _test_database(url, dbtype):
             assert isinstance(row["uid"], uuid.UUID)
             assert row["tags"] == ["tag1", "tag2", None]
             assert row["nums"] == [dec, decimal.Decimal("0")]
-            ok(f"{dbtype}: PG-specific types (UUID, TIMESTAMPTZ, arrays) ✓")
+            ok(f"{dbtype}: PG-specific types (UUID, TIMESTAMPTZ, arrays) ")
         elif dbtype == "mysql":
             assert row["created"] == now_naive
             assert row["data"] == payload  # JSON auto-decoded
-            ok(f"{dbtype}: MySQL JSON auto-decoded ✓")
+            ok(f"{dbtype}: MySQL JSON auto-decoded ")
         else:
             assert row["created"] == now_naive
             assert isinstance(row["data"], str)  # SQLite stores as TEXT
-            ok(f"{dbtype}: SQLite TEXT for JSON ✓")
+            ok(f"{dbtype}: SQLite TEXT for JSON ")
 
         # --- fetch (list) ---
         rows = await pool.fetch(f"SELECT id, name FROM api_test WHERE age > {placeholder}", [0])

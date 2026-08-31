@@ -52,53 +52,126 @@ maturin develop --release
 
 ## 快速上手
 
+三个数据库共用同一套 `connect()` / `Pool` / `Transaction` API。连接字符串遵循 sqlx 约定：
+
+```python
+# SQLite:     "sqlite:app.db"（文件）或 "sqlite::memory:"（内存）  —— 占位符 ?
+# PostgreSQL: "postgres://user:pass@localhost:5432/db"          —— 占位符 $1, $2, ...
+# MySQL:      "mysql://user:pass@localhost:3306/db?ssl-mode=disabled" —— 占位符 ?
+#             （若服务端 TLS 与 rustls 不兼容，加上 ?ssl-mode=disabled）
+import asyncio
+import rsqlx
+```
+
+### SQLite
+
 ```python
 import asyncio
 import rsqlx
 
 async def main():
-    # 连接字符串和 sqlx 一致:
-    #   postgres://user:pass@host/db
-    #   mysql://user:pass@host/db
-    #   sqlite:path/to.db  或  sqlite::memory:
-    pool = await rsqlx.connect("sqlite:test.db", max_connections=5)
+    pool = await rsqlx.connect("sqlite::memory:", max_connections=5)
 
     await pool.execute(
-        "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INT)"
+        "CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INT)"
     )
 
-    # insert 返回 ExecuteResult
-    res = await pool.execute(
-        "INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]
-    )
-    print(res.rows_affected, res.last_insert_id)
+    # execute 返回 ExecuteResult(rows_affected, last_insert_id)
+    res = await pool.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30])
+    print(res.rows_affected, res.last_insert_id)            # 1 1
 
-    # 查询返回 list[dict]
+    # fetch 返回 list[dict]
     rows = await pool.fetch("SELECT * FROM users WHERE age > ?", [18])
+    print(rows)                                            # [{'id': 1, 'name': 'Alice', 'age': 30}]
 
-    # 单行查询
-    user = await pool.fetch_one("SELECT * FROM users WHERE id = ?", [1])
-    maybe = await pool.fetch_optional("SELECT * FROM users WHERE id = ?", [99])  # None
+    # 单行辅助方法
+    user  = await pool.fetch_one("SELECT * FROM users WHERE id = ?", [1])        # 无行时抛 RowNotFound
+    maybe = await pool.fetch_optional("SELECT * FROM users WHERE id = ?", [99])  # 无行返回 None
 
-    # 事务 — 正常退出自动 commit，异常自动 rollback
+    # 事务：正常退出自动提交，异常自动回滚
     async with await pool.begin() as tx:
-        await tx.execute("UPDATE users SET age = ? WHERE id = ?", [31, 1])
         await tx.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Bob", 25])
-
-    # 批量写入 — INSERT 语句会自动改写为多值 INSERT
-    await pool.execute_many(
-        "INSERT INTO users (name, age) VALUES (?, ?)",
-        [["Carol", 28], ["Dave", 40]],
-    )
-
-    # 存储过程等预编译协议不支持的语句用 execute_raw
-    await pool.execute_raw("DROP PROCEDURE IF EXISTS sp_demo")
-    await pool.execute_raw("CREATE PROCEDURE sp_demo(IN n VARCHAR(64)) BEGIN ... END")
-    await pool.execute("CALL sp_demo(?)", ["hello"])
 
     await pool.close()
 
 asyncio.run(main())
+```
+
+### PostgreSQL
+
+```python
+import asyncio
+import rsqlx
+
+async def main():
+    pool = await rsqlx.connect("postgres://user:pass@localhost:5432/db", max_connections=5)
+
+    await pool.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id SERIAL PRIMARY KEY, name TEXT, age INT, tags TEXT[])"
+    )
+
+    await pool.execute("INSERT INTO users (name, age) VALUES ($1, $2)", ["Alice", 30])
+
+    # 纯标量 list 自动绑定为 PG 原生数组（保留 None 元素）
+    await pool.execute(
+        "INSERT INTO users (name, age, tags) VALUES ($1, $2, $3)",
+        ["Bob", 25, ["python", "rust", None]],
+    )
+
+    user = await pool.fetch_one("SELECT * FROM users WHERE id = $1", [1])
+    print(user["tags"])                                    # ['python', 'rust', None]
+
+    # 批量写入：单行 INSERT 自动改写为多值 INSERT
+    await pool.execute_many(
+        "INSERT INTO users (name, age) VALUES ($1, $2)",
+        [["Carol", 28], ["Dave", 40]],
+    )
+
+    await pool.close()
+
+asyncio.run(main())
+```
+
+### MySQL
+
+```python
+import asyncio
+import rsqlx
+
+async def main():
+    # 若服务端 TLS 与 rustls 不兼容（MySQL 8 默认配置常见），加 ?ssl-mode=disabled
+    pool = await rsqlx.connect(
+        "mysql://user:pass@localhost:3306/db?ssl-mode=disabled", max_connections=5
+    )
+
+    await pool.execute(
+        "CREATE TABLE IF NOT EXISTS users ("
+        "id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64), age INT)"
+    )
+
+    await pool.execute("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30])
+    rows = await pool.fetch("SELECT * FROM users WHERE age > ?", [18])
+
+    # 存储过程、多语句脚本等预编译协议不支持的语句用原生协议 execute_raw / fetch_raw
+    await pool.execute_raw("DROP PROCEDURE IF EXISTS sp_hello")
+    await pool.execute_raw(
+        "CREATE PROCEDURE sp_hello(IN n VARCHAR(64)) BEGIN SELECT n; END"
+    )
+    await pool.execute("CALL sp_hello(?)", ["world"])
+
+    await pool.close()
+
+asyncio.run(main())
+```
+
+### 迁移
+
+```python
+# 执行目录下的 sqlx 风格迁移文件（只应用一次，幂等）:
+#   migrations/0001_init.up.sql
+#   migrations/0002_seed.up.sql
+await pool.migrate("migrations")
 ```
 
 ### 占位符

@@ -40,6 +40,22 @@ jobs:
             manylinux: "2_28"
           # Linux aarch64
           - os: ubuntu-22.04
+            python: "3.9"
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.10"
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.11"
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
+            python: "3.12"
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+          - os: ubuntu-22.04
             python: "3.13"
             target: aarch64-unknown-linux-gnu
             manylinux: "2_28"
@@ -59,24 +75,37 @@ jobs:
           - os: windows-latest
             python: "3.13"
             target: x86_64-pc-windows-msvc
-          # macOS
+          # macOS x86_64 (Intel)
+          - os: macos-13
+            python: "3.9"
+            target: x86_64-apple-darwin
+          - os: macos-13
+            python: "3.10"
+            target: x86_64-apple-darwin
+          - os: macos-13
+            python: "3.11"
+            target: x86_64-apple-darwin
+          - os: macos-13
+            python: "3.12"
+            target: x86_64-apple-darwin
           - os: macos-13
             python: "3.13"
             target: x86_64-apple-darwin
+          # macOS aarch64 (Apple Silicon)
           - os: macos-14
-            python: "3.13"
-            target: aarch64-apple-darwin
-          - os: macos-14
-            python: "3.12"
-            target: aarch64-apple-darwin
-          - os: macos-14
-            python: "3.11"
+            python: "3.9"
             target: aarch64-apple-darwin
           - os: macos-14
             python: "3.10"
             target: aarch64-apple-darwin
           - os: macos-14
-            python: "3.9"
+            python: "3.11"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.12"
+            target: aarch64-apple-darwin
+          - os: macos-14
+            python: "3.13"
             target: aarch64-apple-darwin
 
     steps:
@@ -94,9 +123,9 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
-      # Linux cross-compile for aarch64 uses zig as the C toolchain
-      - name: Install zig (Linux aarch64 only)
-        if: matrix.os == 'ubuntu-22.04' && matrix.target == 'aarch64-unknown-linux-gnu'
+      # Linux builds use zig: for aarch64 cross-compile AND for musllinux (Alpine) wheels
+      - name: Install zig (Linux only)
+        if: matrix.os == 'ubuntu-22.04' && contains(matrix.target, 'linux-gnu')
         run: pip install ziglang
 
       - name: Build wheel
@@ -104,9 +133,13 @@ jobs:
         run: |
           ARGS="--release --target ${{ matrix.target }} --out dist"
           if [ -n "${{ matrix.manylinux }}" ]; then
-            ARGS="$ARGS --manylinux ${{ matrix.manylinux }}"
+            # emit both manylinux_2_17 (CentOS 7 / old glibc) and manylinux_2_28,
+            # plus musllinux_1_2 for Alpine / Docker (musl libc)
+            ARGS="$ARGS --manylinux 2_17 --manylinux 2_28"
+            ARGS="$ARGS --musllinux 1_2"
           fi
-          if [ "${{ matrix.os }}" = "ubuntu-22.04" ] && [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+          # zig is required for aarch64 cross-compile and for musllinux builds
+          if [[ "${{ matrix.target }}" == aarch64-* ]] || [[ -n "${{ matrix.manylinux }}" ]]; then
             ARGS="$ARGS --zig"
           fi
           maturin build $ARGS

@@ -29,7 +29,7 @@ Rust:    sqlx::PgPool / MySqlPool / SqlitePool  +  Tokio runtime
 
 | 组件 | 选择 | 理由 |
 |------|------|------|
-| 数据库核心 | **sqlx 0.8.6** | 纯 Rust、异步、三库统一抽象、自带连接池和迁移 |
+| 数据库核心 | **sqlx 0.9.0** | 纯 Rust、异步、三库统一抽象、自带连接池和迁移 |
 | Python 绑定 | **pyo3 0.24.2** | `experimental-async` 特性支持 `#[pymethods]` 里直接写 `async fn` |
 | 异步运行时 | **tokio 1**（全局多线程） | sqlx 的 `runtime-tokio` 需要 tokio 上下文来跑定时器和 IO |
 | TLS | **rustls + ring** | 纯 Rust，避免 Linux 上依赖系统 OpenSSL 开发包 |
@@ -489,7 +489,7 @@ build-backend = "maturin"
 
 [project]
 name = "rsqlx"
-version = "0.1.1"
+version = "0.9.0"
 requires-python = ">=3.9"
 
 [tool.maturin]
@@ -524,7 +524,7 @@ maturin build --release -o dist
 
 # 产物
 ls dist/
-# rsqlx-0.1.1-cp313-cp313-win_amd64.whl
+# rsqlx-0.9.0-cp313-cp313-win_amd64.whl
 
 # 安装到当前环境
 pip install --force-reinstall --no-deps dist/rsqlx-*.whl
@@ -534,7 +534,7 @@ maturin develop
 maturin develop --release
 ```
 
-wheel 命名规则 `rsqlx-0.1.1-cp313-cp313-win_amd64.whl`：
+wheel 命名规则 `rsqlx-0.9.0-cp313-cp313-win_amd64.whl`：
 - `cp313` — CPython 3.13（非 abi3，所以版本绑定）
 - `win_amd64` — 平台架构
 
@@ -583,12 +583,12 @@ python -m zipfile -l dist/rsqlx-*.whl
 # 应该看到：
 #   rsqlx/__init__.py        (maturin 生成的空壳)
 #   rsqlx/rsqlx.cp313-win_amd64.pyd   (真正的原生模块)
-#   rsqlx-0.1.1.dist-info/METADATA
-#   rsqlx-0.1.1.dist-info/WHEEL
+#   rsqlx-0.9.0.dist-info/METADATA
+#   rsqlx-0.9.0.dist-info/WHEEL
 
 # 查看元数据
 python -m zipfile -e dist/rsqlx-*.whl /tmp/wheel_check
-cat /tmp/wheel_check/rsqlx-0.1.1.dist-info/METADATA
+cat /tmp/wheel_check/rsqlx-0.9.0.dist-info/METADATA
 ```
 
 METADATA 里应该包含 `Requires-Python: >=3.9`、classifiers、作者信息 —— 这些都来自 `pyproject.toml`。
@@ -599,7 +599,7 @@ METADATA 里应该包含 `Requires-Python: >=3.9`、classifiers、作者信息 �
 
 ```bash
 maturin sdist -o dist
-# 产物: rsqlx-0.1.1.tar.gz（含 Rust 源码 + Cargo.toml + pyproject.toml）
+# 产物: rsqlx-0.9.0.tar.gz（含 Rust 源码 + Cargo.toml + pyproject.toml）
 ```
 
 用户装 sdist 时会本地编译（需要 Rust 工具链）。
@@ -631,7 +631,7 @@ maturin sdist -o dist
 ```toml
 [project]
 name = "rsqlx"
-version = "0.1.1"
+version = "0.9.0"
 description = "..."              # PyPI 列表页显示的一句话
 readme = "README.md"              # PyPI 项目页渲染的长文档
 requires-python = ">=3.9"
@@ -689,11 +689,11 @@ publish:
 ```toml
 # Cargo.toml
 [package]
-version = "0.1.1"
+version = "0.9.0"
 
 # pyproject.toml
 [project]
-version = "0.1.1"
+version = "0.9.0"
 ```
 
 同时在 `CHANGELOG.md` 里记录本次变更。
@@ -702,10 +702,10 @@ version = "0.1.1"
 
 ```bash
 git add -A
-git commit -m "Release v0.1.1"
-git tag v0.1.1
+git commit -m "Release v0.9.0"
+git tag v0.9.0
 git push origin main
-git push origin v0.1.1      # ← 这个会触发发布
+git push origin v0.9.0      # ← 这个会触发发布
 ```
 
 ### 步骤 5：观察构建
@@ -839,9 +839,9 @@ pip 会根据当前平台自动选择对应的 wheel：
 
 | 用户环境 | 下载的 wheel |
 |---------|-------------|
-| Windows x86_64 + Python 3.13 | `rsqlx-0.1.1-cp313-cp313-win_amd64.whl` |
-| Linux x86_64 + Python 3.12 | `rsqlx-0.1.1-cp312-cp312-manylinux_2_28_x86_64.whl` |
-| macOS arm64 + Python 3.11 | `rsqlx-0.1.1-cp311-cp311-macosx_11_0_arm64.whl` |
+| Windows x86_64 + Python 3.13 | `rsqlx-0.9.0-cp313-cp313-win_amd64.whl` |
+| Linux x86_64 + Python 3.12 | `rsqlx-0.9.0-cp312-cp312-manylinux_2_28_x86_64.whl` |
+| macOS arm64 + Python 3.11 | `rsqlx-0.9.0-cp311-cp311-macosx_11_0_arm64.whl` |
 
 如果**没有**匹配的 wheel（比如 Alpine Linux、FreeBSD、或 Python 3.14 而 wheel 只到 3.13），pip 会回退到 sdist，本地编译 —— 这需要用户装 Rust 工具链。
 
@@ -973,7 +973,7 @@ license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 
 `license-files` 确保 `maturin build` 把两份 LICENSE 文件都打进 wheel 的
 `*.dist-info/` 目录，用户 `pip install` 后能在
-`site-packages/rsqlx-0.1.1.dist-info/` 下看到。
+`site-packages/rsqlx-0.9.0.dist-info/` 下看到。
 
 ## 5.4 贡献者许可
 
@@ -1015,7 +1015,7 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 # ===== 发布 =====
 maturin upload --repository testpypi dist/*   # 传 TestPyPI
 maturin upload dist/*                         # 传正式 PyPI
-git tag v0.1.1 && git push origin v0.1.1      # 触发 CI 自动发布
+git tag v0.9.0 && git push origin v0.9.0      # 触发 CI 自动发布
 
 # ===== 依赖维护 =====
 cargo search sqlx                    # 查 sqlx 最新版

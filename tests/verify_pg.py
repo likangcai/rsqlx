@@ -10,13 +10,24 @@ import decimal
 import json
 import uuid
 
+import os
+from urllib.parse import urlparse
+
 import psycopg2
 import psycopg2.extras  # register_uuid / register_default_json
 
 import rsqlx
 
-PG_DSN = "host=127.0.0.1 port=5433 user=postgres dbname=postgres"
-RSQLX_URL = "postgres://postgres@127.0.0.1:5433/postgres"
+# Prefer RSQLX_TEST_PG_URL (set in CI / by the user); fall back to a local default.
+PG_URL = os.environ.get("RSQLX_TEST_PG_URL", "postgres://postgres@127.0.0.1:5432/postgres")
+_u = urlparse(PG_URL)
+_pw = _u.password or ""
+_db = _u.path.lstrip("/") or "postgres"
+PG_DSN = (
+    f"host={_u.hostname} port={_u.port or 5432} user={_u.username} dbname={_db}"
+    + (f" password={_pw}" if _pw else "")
+)
+RSQLX_URL = PG_URL
 
 
 def pg_conn():
