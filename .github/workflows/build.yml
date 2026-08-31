@@ -211,7 +211,11 @@ jobs:
               if [ -n "${PYTHON:-}" ]; then
                 $MATURIN build $BASE_ARGS --compatibility musllinux_1_2
               else
-                $MATURIN build $BASE_ARGS --zig --compatibility musllinux_1_2
+                # No-container musl build (aarch64 on arm64 runner): maturin's
+                # interpreter auto-discovery fails here, so pin the setup-python
+                # interpreter explicitly with -i.
+                INTERP="$(python -c 'import sys; print(sys.executable)')"
+                $MATURIN build $BASE_ARGS -i "$INTERP" --zig --compatibility musllinux_1_2
               fi
               ;;
             *)
