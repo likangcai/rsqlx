@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `rsqlx.Pool`: connection pool + query entry points.
 
 use std::sync::Arc;

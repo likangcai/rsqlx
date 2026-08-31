@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Global tokio runtime + GIL-releasing future wrapper.
 
 use std::future::Future;

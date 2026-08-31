@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Backend dispatch: parameter binding, row decoding and generic query execution
 //! for PostgreSQL / MySQL / SQLite.
 

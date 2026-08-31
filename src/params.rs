@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Python -> Rust parameter conversion.
 //!
 //! Parameters are eagerly converted to a Rust-side tagged value (`PyParam`)

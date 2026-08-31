@@ -2,9 +2,28 @@
 
 本项目记录 rsqlx 的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [0.1.1] - 2026-08-31
+
+许可布局对齐上游 sqlx。
+
+### 变更
+
+- 删除单独的 `LICENSE` 索引文件，仅保留 `LICENSE-MIT` + `LICENSE-APACHE` 两份（与 sqlx 仓库同构）
+- 版权署名改为 `Copyright (C) rsqlx Contributors`，并注明 `Portions of this work Copyright (C) SQLx Contributors`
+- 7 个 `src/*.rs` 源码 SPDX 头署名同步更新
+- `pyproject.toml` 的 `license-files` 移除已删除的 `LICENSE`
+
 ## [0.1.0] - 2026-08
 
 首个可用版本。
+
+### 许可协议
+
+- 双许可: 用户可任选 **MIT** 或 **Apache-2.0**（全文见 `LICENSE-MIT` / `LICENSE-APACHE`）
+- 许可证文件布局与上游 sqlx 一致：仅 `LICENSE-MIT` + `LICENSE-APACHE` 两份，无单独 `LICENSE` 索引文件
+- 版权署名 `Copyright (C) rsqlx Contributors`，并注明 `Portions of this work Copyright (C) SQLx Contributors`（rsqlx 基于 sqlx）
+- 源码文件头部带 SPDX 标识 `SPDX-License-Identifier: MIT OR Apache-2.0`
+- `pyproject.toml` 声明 `license = "MIT OR Apache-2.0"` 并打包两份 LICENSE 文件进 wheel
 
 ### 核心实现
 

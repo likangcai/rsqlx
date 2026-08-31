@@ -4,11 +4,13 @@ build-backend = "maturin"
 
 [project]
 name = "rsqlx"
-version = "0.1.0"
+version = "0.1.1"
 description = "Async PostgreSQL / MySQL / SQLite driver for Python, powered by Rust's sqlx"
 readme = "README.md"
 requires-python = ">=3.9"
+# Dual-licensed: users may choose either MIT or Apache-2.0 (see LICENSE-MIT and LICENSE-APACHE).
 license = { text = "MIT OR Apache-2.0" }
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 authors = [
     { name = "Yingzi", email = "yingzilkq@163.com" },
 ]

@@ -1,6 +1,6 @@
 [package]
 name = "rsqlx"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Async PostgreSQL / MySQL / SQLite driver for Python, powered by Rust's sqlx"
 license = "MIT OR Apache-2.0"

@@ -328,4 +328,25 @@ rsqlx/
 
 ## License
 
-MIT OR Apache-2.0
+rsqlx is **dual-licensed** under your choice of either:
+
+- **MIT License** — see [`LICENSE-MIT`](LICENSE-MIT)
+- **Apache License, Version 2.0** — see [`LICENSE-APACHE`](LICENSE-APACHE)
+
+You may use, copy, modify, merge, publish, distribute, sublicense and/or sell
+copies of this software under the terms of **either** license. You are not
+required to comply with both — pick whichever fits your situation and any
+downstream obligations.
+
+| | MIT | Apache-2.0 |
+|---|---|---|
+| Type | Permissive | Permissive |
+| Patent grant | No | Yes (explicit) |
+| Change-notice | Not required | Required for modified files |
+| NOTICE preservation | Not required | Required if a `NOTICE` file exists |
+
+Pick **MIT** for the simplest terms; pick **Apache-2.0** if you want the
+explicit patent grant.
+
+Copyright (C) rsqlx Contributors. Unless stated otherwise, contributions are
+dual-licensed under the same terms.

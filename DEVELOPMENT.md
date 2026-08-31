@@ -489,7 +489,7 @@ build-backend = "maturin"
 
 [project]
 name = "rsqlx"
-version = "0.1.0"
+version = "0.1.1"
 requires-python = ">=3.9"
 
 [tool.maturin]
@@ -524,7 +524,7 @@ maturin build --release -o dist
 
 # 产物
 ls dist/
-# rsqlx-0.1.0-cp313-cp313-win_amd64.whl
+# rsqlx-0.1.1-cp313-cp313-win_amd64.whl
 
 # 安装到当前环境
 pip install --force-reinstall --no-deps dist/rsqlx-*.whl
@@ -534,7 +534,7 @@ maturin develop
 maturin develop --release
 ```
 
-wheel 命名规则 `rsqlx-0.1.0-cp313-cp313-win_amd64.whl`：
+wheel 命名规则 `rsqlx-0.1.1-cp313-cp313-win_amd64.whl`：
 - `cp313` — CPython 3.13（非 abi3，所以版本绑定）
 - `win_amd64` — 平台架构
 
@@ -583,12 +583,12 @@ python -m zipfile -l dist/rsqlx-*.whl
 # 应该看到：
 #   rsqlx/__init__.py        (maturin 生成的空壳)
 #   rsqlx/rsqlx.cp313-win_amd64.pyd   (真正的原生模块)
-#   rsqlx-0.1.0.dist-info/METADATA
-#   rsqlx-0.1.0.dist-info/WHEEL
+#   rsqlx-0.1.1.dist-info/METADATA
+#   rsqlx-0.1.1.dist-info/WHEEL
 
 # 查看元数据
 python -m zipfile -e dist/rsqlx-*.whl /tmp/wheel_check
-cat /tmp/wheel_check/rsqlx-0.1.0.dist-info/METADATA
+cat /tmp/wheel_check/rsqlx-0.1.1.dist-info/METADATA
 ```
 
 METADATA 里应该包含 `Requires-Python: >=3.9`、classifiers、作者信息 —— 这些都来自 `pyproject.toml`。
@@ -599,7 +599,7 @@ METADATA 里应该包含 `Requires-Python: >=3.9`、classifiers、作者信息 �
 
 ```bash
 maturin sdist -o dist
-# 产物: rsqlx-0.1.0.tar.gz（含 Rust 源码 + Cargo.toml + pyproject.toml）
+# 产物: rsqlx-0.1.1.tar.gz（含 Rust 源码 + Cargo.toml + pyproject.toml）
 ```
 
 用户装 sdist 时会本地编译（需要 Rust 工具链）。
@@ -631,7 +631,7 @@ maturin sdist -o dist
 ```toml
 [project]
 name = "rsqlx"
-version = "0.1.0"
+version = "0.1.1"
 description = "..."              # PyPI 列表页显示的一句话
 readme = "README.md"              # PyPI 项目页渲染的长文档
 requires-python = ">=3.9"
@@ -689,11 +689,11 @@ publish:
 ```toml
 # Cargo.toml
 [package]
-version = "0.1.0"
+version = "0.1.1"
 
 # pyproject.toml
 [project]
-version = "0.1.0"
+version = "0.1.1"
 ```
 
 同时在 `CHANGELOG.md` 里记录本次变更。
@@ -702,10 +702,10 @@ version = "0.1.0"
 
 ```bash
 git add -A
-git commit -m "Release v0.1.0"
-git tag v0.1.0
+git commit -m "Release v0.1.1"
+git tag v0.1.1
 git push origin main
-git push origin v0.1.0      # ← 这个会触发发布
+git push origin v0.1.1      # ← 这个会触发发布
 ```
 
 ### 步骤 5：观察构建
@@ -773,13 +773,25 @@ maturin upload dist/*
 
 ## 3.4 版本管理规则
 
+rsqlx 遵循 [语义化版本 2.0.0（SemVer）](https://semver.org/lang/zh-CN/)，版本号格式为 `MAJOR.MINOR.PATCH`：
+
+| 版本位 | 名称 | 变更时机 | 兼容性承诺 |
+|--------|------|----------|------------|
+| X (MAJOR) | 主版本号 | 不兼容的 API 修改 | 不兼容旧版（重大变革） |
+| Y (MINOR) | 次版本号 | 向下兼容的功能性新增 | 向下兼容（新功能） |
+| Z (PATCH) | 修订号 | 向下兼容的问题修正 | 向下兼容（问题修复） |
+
+具体迭代规则：
+
 | 变更类型 | 版本规则 | 示例 |
 |---------|---------|------|
-| sqlx patch 升级、bug 修复 | patch +1 | 0.1.0 → 0.1.1 |
-| sqlx minor 升级、新增 API | minor +1 | 0.1.0 → 0.2.0 |
-| 破坏性 API 变更 | major +1 | 0.1.0 → 1.0.0 |
+| 向下兼容的 bug 修复、文档或许可补完 | patch +1 | 0.1.0 → 0.1.1 |
+| 向下兼容的新 API、新数据库能力 | minor +1 | 0.1.1 → 0.2.0 |
+| 破坏性 API 变更、不兼容修改 | major +1 | 0.1.1 → 1.0.0 |
 
-`Cargo.toml` 和 `pyproject.toml` 的版本号必须同步。
+> 当前处于 `0.y.z` 初始开发阶段：MAJOR 为 0 表示 API 尚未稳定，任何 MINOR 变更都可能包含破坏性改动。这与上游 sqlx 同为 `0.x` 策略一致。
+
+`Cargo.toml`、`pyproject.toml`、`uv.lock` 三处版本号必须保持同步。
 
 ## 3.5 发布检查清单
 
@@ -827,9 +839,9 @@ pip 会根据当前平台自动选择对应的 wheel：
 
 | 用户环境 | 下载的 wheel |
 |---------|-------------|
-| Windows x86_64 + Python 3.13 | `rsqlx-0.1.0-cp313-cp313-win_amd64.whl` |
-| Linux x86_64 + Python 3.12 | `rsqlx-0.1.0-cp312-cp312-manylinux_2_28_x86_64.whl` |
-| macOS arm64 + Python 3.11 | `rsqlx-0.1.0-cp311-cp311-macosx_11_0_arm64.whl` |
+| Windows x86_64 + Python 3.13 | `rsqlx-0.1.1-cp313-cp313-win_amd64.whl` |
+| Linux x86_64 + Python 3.12 | `rsqlx-0.1.1-cp312-cp312-manylinux_2_28_x86_64.whl` |
+| macOS arm64 + Python 3.11 | `rsqlx-0.1.1-cp311-cp311-macosx_11_0_arm64.whl` |
 
 如果**没有**匹配的 wheel（比如 Alpine Linux、FreeBSD、或 Python 3.14 而 wheel 只到 3.13），pip 会回退到 sdist，本地编译 —— 这需要用户装 Rust 工具链。
 
@@ -919,6 +931,66 @@ python -m pytest tests/test_sqlite.py -v
 
 ---
 
+# 第五部分：许可证与贡献
+
+rsqlx 采用 **MIT OR Apache-2.0 双许可**（和上游 sqlx 一致，sqlx 本身也是双许可）。
+
+## 5.1 文件布局
+
+```
+LICENSE-MIT    # MIT License 全文
+LICENSE-APACHE # Apache License 2.0 全文
+```
+
+仓库根目录只放这两份文件，**刻意与上游 sqlx 保持一致**（sqlx 仓库也是同名两份、没有单独的 `LICENSE` 索引文件）。原因：
+
+- `LICENSE-MIT` / `LICENSE-APACHE` 是 Rust/cargo 生态约定俗成的文件名，cargo / PyPI / GitHub 都能自动识别
+- 双许可下用户直接拿到两份全文，无需在单文件里翻找
+- 与上游 sqlx 同构，方便长期对照与同步
+
+## 5.2 源码 SPDX 头
+
+每个 `src/*.rs` 文件顶部都带两行声明，便于许可证随源码分发（Apache-2.0 要求保留声明）：
+
+```rust
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+```
+
+新增 `.rs` 文件时务必带上这两行。其他语言（如有 `.py` 脚本）可加：
+
+```python
+# Copyright (C) rsqlx Contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+```
+
+## 5.3 pyproject.toml 声明
+
+```toml
+license = { text = "MIT OR Apache-2.0" }
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+```
+
+`license-files` 确保 `maturin build` 把两份 LICENSE 文件都打进 wheel 的
+`*.dist-info/` 目录，用户 `pip install` 后能在
+`site-packages/rsqlx-0.1.1.dist-info/` 下看到。
+
+## 5.4 贡献者许可
+
+`LICENSE-MIT` / `LICENSE-APACHE` 文件末尾声明：除非贡献者另有说明，所有提交（Contribution）默认以
+相同的双许可条款授权。这是 Apache-2.0 第 5 条的惯例表述，不要求贡献者签 CLA。
+
+## 5.5 选哪份
+
+| 想怎么用 | 选 |
+|---------|-----|
+| 最简单、无附加义务 | MIT |
+| 需要明确的专利授权、企业合规 | Apache-2.0 |
+
+两选一即可，不需要两份都遵守。
+
+---
+
 # 附录：常用命令速查
 
 ```bash
@@ -943,7 +1015,7 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 # ===== 发布 =====
 maturin upload --repository testpypi dist/*   # 传 TestPyPI
 maturin upload dist/*                         # 传正式 PyPI
-git tag v0.1.0 && git push origin v0.1.0      # 触发 CI 自动发布
+git tag v0.1.1 && git push origin v0.1.1      # 触发 CI 自动发布
 
 # ===== 依赖维护 =====
 cargo search sqlx                    # 查 sqlx 最新版

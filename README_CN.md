@@ -371,6 +371,24 @@ rsqlx/
     └── bench_pymysql_vs_rsqlx.py  # 功能覆盖 + 性能基准
 ```
 
-## License
+## 许可协议
 
-MIT OR Apache-2.0
+rsqlx 采用 **双许可**，你可以任选其一使用：
+
+- **MIT License** — 见 [`LICENSE-MIT`](LICENSE-MIT)
+- **Apache License, Version 2.0** — 见 [`LICENSE-APACHE`](LICENSE-APACHE)
+
+你可以根据 **任一份** 协议的条款来使用、复制、修改、合并、发布、分发、
+再授权和/或销售本软件的副本。两份协议**不要求同时遵守**——选你觉得方便、
+且符合你下游义务的那一份即可。
+
+| | MIT | Apache-2.0 |
+|---|---|---|
+| 类型 | 宽松许可 | 宽松许可 |
+| 专利授权 | 无 | 有（明确授予） |
+| 修改声明 | 不要求 | 修改的文件需标注 |
+| NOTICE 保留 | 不要求 | 存在 `NOTICE` 文件时需保留 |
+
+只要最简单的条款选 **MIT**；想要明确的专利授权选 **Apache-2.0**。
+
+Copyright (C) rsqlx Contributors。除非另有说明，所有贡献也以相同的双许可条款授权。

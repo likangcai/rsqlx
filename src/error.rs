@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Map `sqlx::Error` (and join errors) onto the `rsqlx` exception hierarchy.
 
 use pyo3::prelude::*;

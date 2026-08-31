@@ -1,3 +1,6 @@
+// Copyright (C) rsqlx Contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! rsqlx — async PostgreSQL / MySQL / SQLite driver for Python,
 //! powered by Rust's [sqlx](https://github.com/launchbadge/sqlx) crate.
 
