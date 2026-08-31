@@ -7,14 +7,13 @@ on:
     branches: [main, master]
 
 jobs:
-  test:
-    name: Test ${{ matrix.os }} / Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
+  # ----- Linux: full test suite (SQLite + PostgreSQL + MySQL via Docker) ------
+  test-linux:
+    name: Test Linux / CPython ${{ matrix.python }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
-        # Windows, macOS, Linux × Python 3.9–3.13
-        os: [ubuntu-22.04, windows-latest, macos-14]
         python: ["3.9", "3.11", "3.13"]
 
     services:
@@ -60,17 +59,83 @@ jobs:
           pip install maturin pytest psycopg2-binary pymysql
 
       - name: Build and install rsqlx (debug for speed)
-        run: maturin develop --skip-install
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          maturin develop --skip-install
 
       - name: Run SQLite tests
-        run: python -m pytest tests/test_sqlite.py -v
+        run: |
+          source .venv/bin/activate
+          python -m pytest tests/test_sqlite.py -v
 
       - name: Run PostgreSQL cross-validation
         env:
           RSQLX_TEST_PG_URL: postgres://postgres@127.0.0.1:5432/postgres
-        run: python tests/verify_pg.py
+        run: |
+          source .venv/bin/activate
+          python tests/verify_pg.py
 
       - name: Run MySQL cross-validation
         env:
           RSQLX_TEST_MYSQL_URL: mysql://root:root@127.0.0.1:3306/testdb
-        run: python tests/verify_mysql.py
+        run: |
+          source .venv/bin/activate
+          python tests/verify_mysql.py
+
+  # ----- Windows / macOS: SQLite-only (no Docker support) ----------------------
+  test-other:
+    name: Test ${{ matrix.os }} / CPython ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python: "3.9"
+          - os: windows-latest
+            python: "3.11"
+          - os: windows-latest
+            python: "3.13"
+          - os: macos-14
+            python: "3.9"
+          - os: macos-14
+            python: "3.11"
+          - os: macos-14
+            python: "3.13"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install maturin & test deps
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install maturin pytest
+
+      - name: Build and install rsqlx (debug for speed)
+        shell: bash
+        run: |
+          python -m venv .venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+          maturin develop --skip-install
+
+      - name: Run SQLite tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+          python -m pytest tests/test_sqlite.py -v
