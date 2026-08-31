@@ -553,17 +553,28 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 
 ### CI 矩阵构建（推荐）
 
-`.github/workflows/build.yml` 里定义了完整矩阵：
+`.github/workflows/build.yml` 用 GitHub Actions 在三大 OS 的 runner 上构建。
 
-| 平台 | Runner | 目标三元组 | Python 版本 |
-|------|--------|-----------|------------|
-| Linux x86_64 | ubuntu-22.04 | `x86_64-unknown-linux-gnu` | 3.9–3.13 |
-| Linux aarch64 | ubuntu-22.04 + zig | `aarch64-unknown-linux-gnu` | 3.13 |
-| Windows x86_64 | windows-latest | `x86_64-pc-windows-msvc` | 3.9–3.13 |
-| macOS x86_64 | macos-13 | `x86_64-apple-darwin` | 3.13 |
-| macOS arm64 | macos-14 | `aarch64-apple-darwin` | 3.9–3.13 |
+**Linux 构建在 manylinux / musllinux Docker 容器内执行** —— 容器自带正确的 glibc/musl 运行时和交叉编译工具链（`aarch64-linux-gnu-gcc` 等），因此无需 `zig`，也能保证产出的 wheel 满足 manylinux / musllinux 合规标准（避免裸系统 GLIBC 版本过高导致的不兼容）。
 
-Linux 用 `--manylinux 2_28` 保证 glibc 兼容性（glibc ≥ 2.28 的系统都能装）。
+完整矩阵：
+
+| 平台 | Runner / 容器 | 目标三元组 | 兼容性标签 | Python 版本 |
+|------|--------------|-----------|-----------|------------|
+| Linux x86_64 | manylinux_2_28_x86_64 | `x86_64-unknown-linux-gnu` | manylinux_2_28 + 2_17 | 3.9–3.13 |
+| Linux aarch64 | manylinux_2_28_x86_64（交叉） | `aarch64-unknown-linux-gnu` | manylinux_2_28 + 2_17 | 3.9–3.13 |
+| Linux x86_64 musl | musllinux_1_2_x86_64 | `x86_64-unknown-linux-musl` | musllinux_1_2 | 3.9–3.13 |
+| Linux aarch64 musl | musllinux_1_2_x86_64（交叉） | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.13 |
+| Windows x86_64 | windows-latest（原生） | `x86_64-pc-windows-msvc` | — | 3.9–3.13 |
+| macOS x86_64 | macos-13（原生） | `x86_64-apple-darwin` | — | 3.9–3.13 |
+| macOS arm64 | macos-14（原生） | `aarch64-apple-darwin` | — | 3.9–3.13 |
+| sdist | manylinux_2_28_x86_64 | 源码包 | — | — |
+
+- **glibc 用户**：`manylinux_2_28` 标签覆盖 CentOS 9 / Ubuntu 22.04+ 等现代发行版；`manylinux_2_17` 标签向后兼容 CentOS 7 / Ubuntu 16.04 等老系统。
+- **musl 用户**（Alpine、多数 Docker 基础镜像）：`musllinux_1_2` 标签兼容 Alpine 3.12+。
+- **Windows / macOS**：原生构建，无需容器，wheel 标签为 `win_amd64` / `macosx_11_0_*`。
+
+> 本地做交叉编译仍可用 `zig`（见上节），但 CI 选择 Docker 容器方案以获得确定的 glibc 版本和合规保证。
 
 ### 关于 SQLite 的 C 依赖
 

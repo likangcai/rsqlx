@@ -16,6 +16,11 @@
   - `query()` / `raw_sql()` 新增 `SqlSafeStr` 约束，运行时动态 SQL 改用 `sqlx::AssertSqlSafe` 包裹
 - 功能不变：三库统一接口、参数/行类型映射、批量多值 INSERT、事务、迁移、原生查询等保持原有行为
 
+### 构建与 CI
+
+- 构建系统：CI 改用 manylinux / musllinux Docker 容器构建 Linux wheel，容器内自带 glibc/musl 运行时与交叉编译工具链（`aarch64-linux-gnu-gcc` 等），不再依赖 `zig`；glibc 目标同时打 `manylinux_2_28` 与 `manylinux_2_17` 双标签以兼容新旧发行版，musl 目标补全 Python 3.9–3.13 覆盖（兼容 Alpine / 多数 Docker 镜像）
+- 测试：拆分 Linux（含 PostgreSQL / MySQL Docker 服务）与 Windows / macOS（仅 SQLite）测试 job；所有平台先在 venv 内安装依赖再运行，修复 `maturin develop` 与 `pytest` 找不到解释器的问题
+
 ## [0.1.1] - 2026-08-31
 
 许可布局对齐上游 sqlx。

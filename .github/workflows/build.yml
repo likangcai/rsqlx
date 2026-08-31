@@ -177,15 +177,23 @@ jobs:
           if [ -n "${PYTHON:-}" ]; then
             BASE_ARGS="$BASE_ARGS -i $PYTHON"
           fi
-          # Determine manylinux tag based on container type
-          if [[ "${{ matrix.container }}" == *manylinux* ]]; then
-            # manylinux_2_28 container → build with 2_28 tag, re-tag for 2_17
-            maturin build $BASE_ARGS --manylinux 2_28
-            maturin build $BASE_ARGS --manylinux 2_17
-          else
-            # Windows / macOS / musllinux: single build
-            maturin build $BASE_ARGS
-          fi
+          # manylinux/musllinux containers already bundle the cross-compilers
+          # (aarch64-linux-gnu-gcc, musl-gcc), so we do NOT pass --zig.
+          # maturin 1.x auto-detects zig on cross-compile; we rely on the
+          # container toolchain instead and pin the compatibility tag explicitly.
+          case "${{ matrix.container }}" in
+            *manylinux*)
+              # glibc: tag for both 2_28 (modern) and 2_17 (legacy distros)
+              maturin build $BASE_ARGS --compatibility manylinux_2_28 manylinux_2_17
+              ;;
+            *musllinux*)
+              maturin build $BASE_ARGS --compatibility musllinux_1_2
+              ;;
+            *)
+              # Windows / macOS: native build, no compatibility flag needed
+              maturin build $BASE_ARGS
+              ;;
+          esac
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4

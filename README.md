@@ -30,7 +30,7 @@ Pre-built wheels:
 
 | Platform | Architectures |
 |----------|---------------|
-| Linux (glibc ≥ 2.28) | x86_64, aarch64 |
+| Linux (glibc ≥ 2.28，或 musl ≥ 1.2 / Alpine) | x86_64, aarch64 |
 | Windows 10+ | x86_64, ARM64 |
 | macOS 11+ | x86_64, arm64 |
 
