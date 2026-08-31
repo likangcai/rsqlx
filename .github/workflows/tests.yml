@@ -63,7 +63,7 @@ jobs:
       - name: Build and install rsqlx (debug for speed)
         run: |
           source .venv/bin/activate
-          maturin develop --skip-install
+          maturin develop
 
       - name: Run SQLite tests
         run: |
@@ -134,7 +134,7 @@ jobs:
           else
             source .venv/bin/activate
           fi
-          maturin develop --skip-install
+          maturin develop
 
       - name: Run SQLite tests
         shell: bash

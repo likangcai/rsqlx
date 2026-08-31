@@ -192,6 +192,11 @@ jobs:
           # Use explicit interpreter path for Linux containers, auto-detect for Win/Mac
           if [ -n "${PYTHON:-}" ]; then
             BASE_ARGS="$BASE_ARGS -i $PYTHON"
+            # Inside containers: pip puts binaries in Python's bin dir which is NOT
+            # on the default PATH — invoke via python -m maturin instead.
+            MATURIN="$PYTHON -m maturin"
+          else
+            MATURIN=maturin
           fi
           # manylinux/musllinux containers bundle the right toolchain and the
           # matching-architecture Python, so builds are native (no zig needed).
@@ -200,14 +205,14 @@ jobs:
           # (e.g. a 2_28-built wheel cannot be tagged manylinux_2_17).
           case "${{ matrix.container }}" in
             *manylinux*)
-              maturin build $BASE_ARGS --compatibility manylinux_2_28
+              $MATURIN build $BASE_ARGS --compatibility manylinux_2_28
               ;;
             *musllinux*)
-              maturin build $BASE_ARGS --compatibility musllinux_1_2
+              $MATURIN build $BASE_ARGS --compatibility musllinux_1_2
               ;;
             *)
               # Windows / macOS: native build, no compatibility flag needed
-              maturin build $BASE_ARGS
+              $MATURIN build $BASE_ARGS
               ;;
           esac
 
