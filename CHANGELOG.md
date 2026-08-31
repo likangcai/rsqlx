@@ -18,7 +18,7 @@
 
 ### 构建与 CI
 
-- 构建系统：CI 改用 manylinux / musllinux Docker 容器构建 Linux wheel，容器内自带 glibc/musl 运行时与交叉编译工具链（`aarch64-linux-gnu-gcc` 等），不再依赖 `zig`；glibc 目标同时打 `manylinux_2_28` 与 `manylinux_2_17` 双标签以兼容新旧发行版，musl 目标补全 Python 3.9–3.13 覆盖（兼容 Alpine / 多数 Docker 镜像）
+- 构建系统：CI 改用 manylinux / musllinux Docker 容器构建 Linux wheel，不再依赖 `zig`。x86_64 在 `manylinux_2_28_x86_64` / `musllinux_1_2_x86_64` 容器内构建；**aarch64 改用原生 `ubuntu-24.04-arm` runner + `manylinux_2_28_aarch64` / `musllinux_1_2_aarch64` 容器**（避免从 x86_64 交叉编译时 maturin 误用 x86_64 Python 解释器导致 wheel 损坏）。glibc 目标打 `manylinux_2_28` 标签（CentOS 7 等 2.17 老系统已 EOL，未单独构建 2_17 wheel），musl 目标 Python 3.9–3.13 全覆盖（兼容 Alpine / 多数 Docker 镜像）
 - 测试：拆分 Linux（含 PostgreSQL / MySQL Docker 服务）与 Windows / macOS（仅 SQLite）测试 job；所有平台先在 venv 内安装依赖再运行，修复 `maturin develop` 与 `pytest` 找不到解释器的问题
 
 ## [0.1.1] - 2026-08-31

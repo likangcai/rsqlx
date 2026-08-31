@@ -561,20 +561,22 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 
 | 平台 | Runner / 容器 | 目标三元组 | 兼容性标签 | Python 版本 |
 |------|--------------|-----------|-----------|------------|
-| Linux x86_64 | manylinux_2_28_x86_64 | `x86_64-unknown-linux-gnu` | manylinux_2_28 + 2_17 | 3.9–3.13 |
-| Linux aarch64 | manylinux_2_28_x86_64（交叉） | `aarch64-unknown-linux-gnu` | manylinux_2_28 + 2_17 | 3.9–3.13 |
+| Linux x86_64 | manylinux_2_28_x86_64 | `x86_64-unknown-linux-gnu` | manylinux_2_28 | 3.9–3.13 |
+| Linux aarch64 | ubuntu-24.04-arm + manylinux_2_28_aarch64 | `aarch64-unknown-linux-gnu` | manylinux_2_28 | 3.9–3.13 |
 | Linux x86_64 musl | musllinux_1_2_x86_64 | `x86_64-unknown-linux-musl` | musllinux_1_2 | 3.9–3.13 |
-| Linux aarch64 musl | musllinux_1_2_x86_64（交叉） | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.13 |
+| Linux aarch64 musl | ubuntu-24.04-arm + musllinux_1_2_aarch64 | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.9–3.13 |
 | Windows x86_64 | windows-latest（原生） | `x86_64-pc-windows-msvc` | — | 3.9–3.13 |
 | macOS x86_64 | macos-13（原生） | `x86_64-apple-darwin` | — | 3.9–3.13 |
 | macOS arm64 | macos-14（原生） | `aarch64-apple-darwin` | — | 3.9–3.13 |
 | sdist | manylinux_2_28_x86_64 | 源码包 | — | — |
 
-- **glibc 用户**：`manylinux_2_28` 标签覆盖 CentOS 9 / Ubuntu 22.04+ 等现代发行版；`manylinux_2_17` 标签向后兼容 CentOS 7 / Ubuntu 16.04 等老系统。
+> **aarch64 为什么用原生 arm64 runner 而不是从 x86_64 交叉编译？** 交叉编译时 maturin 需要目标架构（aarch64）的 Python 解释器，而 x86_64 的 manylinux 容器里只有 x86_64 Python，会导致产出的 wheel 嵌入错误的解释器而损坏。改用 `ubuntu-24.04-arm` + aarch64 容器后，构建是原生的，Python/工具链都是 aarch64，wheel 正确无误。
+
+- **glibc 用户**：`manylinux_2_28` 标签覆盖 glibc ≥ 2.28 的发行版（CentOS 9 / Ubuntu 22.04+ / Debian 12+）。（CentOS 7 等 glibc 2.17 老系统已 EOL，未单独构建 `manylinux_2_17` wheel；如需可改用源码 sdist 安装。）
 - **musl 用户**（Alpine、多数 Docker 基础镜像）：`musllinux_1_2` 标签兼容 Alpine 3.12+。
 - **Windows / macOS**：原生构建，无需容器，wheel 标签为 `win_amd64` / `macosx_11_0_*`。
 
-> 本地做交叉编译仍可用 `zig`（见上节），但 CI 选择 Docker 容器方案以获得确定的 glibc 版本和合规保证。
+> 本地做交叉编译仍可用 `zig`（见上节），但 CI 选择 Docker 容器 + 原生 arm runner 方案，以获得确定的 glibc 版本、正确的解释器架构和合规保证。
 
 ### 关于 SQLite 的 C 依赖
 

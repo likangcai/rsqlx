@@ -39,25 +39,25 @@ jobs:
             container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.13"
             target: x86_64-unknown-linux-gnu
-          # ── Linux aarch64 glibc (cross-compile from x86_64 manylinux) ──
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
+          # ── Linux aarch64 glibc (native arm64 runner + aarch64 manylinux container) ──
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.9"
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.10"
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.11"
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.12"
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.13"
             target: aarch64-unknown-linux-gnu
           # ── Linux x86_64 musllinux (Alpine-compatible, musl libc) ──
@@ -81,9 +81,25 @@ jobs:
             container: quay.io/pypa/musllinux_1_2_x86_64
             python: "3.13"
             target: x86_64-unknown-linux-musl
-          # ── Linux aarch64 musllinux (cross-compile from x86_64 musllinux) ──
-          - os: ubuntu-22.04
-            container: quay.io/pypa/musllinux_1_2_x86_64
+          # ── Linux aarch64 musllinux (native arm64 runner + aarch64 musllinux container) ──
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/musllinux_1_2_aarch64
+            python: "3.9"
+            target: aarch64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/musllinux_1_2_aarch64
+            python: "3.10"
+            target: aarch64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/musllinux_1_2_aarch64
+            python: "3.11"
+            target: aarch64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/musllinux_1_2_aarch64
+            python: "3.12"
+            target: aarch64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            container: quay.io/pypa/musllinux_1_2_aarch64
             python: "3.13"
             target: aarch64-unknown-linux-musl
           # ── Windows x86_64 (no container) ──
@@ -177,14 +193,14 @@ jobs:
           if [ -n "${PYTHON:-}" ]; then
             BASE_ARGS="$BASE_ARGS -i $PYTHON"
           fi
-          # manylinux/musllinux containers already bundle the cross-compilers
-          # (aarch64-linux-gnu-gcc, musl-gcc), so we do NOT pass --zig.
-          # maturin 1.x auto-detects zig on cross-compile; we rely on the
-          # container toolchain instead and pin the compatibility tag explicitly.
+          # manylinux/musllinux containers bundle the right toolchain and the
+          # matching-architecture Python, so builds are native (no zig needed).
+          # We tag each wheel with the SAME manylinux/musllinux version as the
+          # build container — auditwheel rejects re-tagging to an OLDER glibc
+          # (e.g. a 2_28-built wheel cannot be tagged manylinux_2_17).
           case "${{ matrix.container }}" in
             *manylinux*)
-              # glibc: tag for both 2_28 (modern) and 2_17 (legacy distros)
-              maturin build $BASE_ARGS --compatibility manylinux_2_28 manylinux_2_17
+              maturin build $BASE_ARGS --compatibility manylinux_2_28
               ;;
             *musllinux*)
               maturin build $BASE_ARGS --compatibility musllinux_1_2
