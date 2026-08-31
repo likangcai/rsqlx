@@ -140,7 +140,7 @@ jobs:
       - name: Build wheel
         shell: bash
         run: |
-          BASE_ARGS="--release --target ${{ matrix.target }} --out dist"
+          BASE_ARGS="--release --target ${{ matrix.target }} -i python${{ matrix.python }} --out dist"
           # zig ONLY for Linux aarch64 cross-compile and musl targets
           # macOS aarch64 runners are natively ARM — never pass --zig
           if [[ "${{ matrix.target }}" == *linux-gnu*aarch64* ]] || [[ "${{ matrix.target }}" == *musl* ]]; then
