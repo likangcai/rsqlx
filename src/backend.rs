@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -339,6 +339,7 @@ where
 
     /// Push a single parameter as a bind value onto a `Separated` builder
     /// (used by `QueryBuilder::push_values` for batch INSERTs).
+    #[allow(dead_code)]
     fn push_bind(
         sep: &mut sqlx::query_builder::Separated<'_, Self, &'static str>,
         p: &PyParam,
@@ -789,7 +790,7 @@ fn parse_insert_for_batch(sql: &str) -> Option<(String, usize, String)> {
     let rest = sql[values_pos + "VALUES".len()..].trim_start();
 
     // Expect ( ?, ?, ... ) possibly with trailing content (ON DUPLICATE KEY etc.)
-    let open = rest.find('(')?;
+    let _ = rest.find('(')?;
     // Find matching close paren
     let mut depth = 0;
     let mut close = 0;
@@ -867,7 +868,7 @@ where
 
 /// Rewrite `?` placeholders to the database's native format if needed
 /// (PostgreSQL uses `$1, $2, ...`).
-fn rewrite_placeholders<DB: Database>(sql: &str, params: &[Vec<PyParam>]) -> String {
+fn rewrite_placeholders<DB: Database>(sql: &str, _params: &[Vec<PyParam>]) -> String {
     let is_pg = std::any::TypeId::of::<DB>() == std::any::TypeId::of::<Postgres>();
     if !is_pg {
         return sql.to_string();

@@ -38,7 +38,7 @@ jobs:
             python: "3.13"
             target: x86_64-unknown-linux-gnu
             manylinux: "2_28"
-          # Linux aarch64
+          # Linux aarch64 (glibc)
           - os: ubuntu-22.04
             python: "3.9"
             target: aarch64-unknown-linux-gnu
@@ -59,6 +59,14 @@ jobs:
             python: "3.13"
             target: aarch64-unknown-linux-gnu
             manylinux: "2_28"
+          # Linux x86_64 musllinux (Alpine / Docker, musl libc)
+          - os: ubuntu-22.04
+            python: "3.13"
+            target: x86_64-unknown-linux-musl
+          # Linux aarch64 musllinux (Alpine ARM / Docker)
+          - os: ubuntu-22.04
+            python: "3.13"
+            target: aarch64-unknown-linux-musl
           # Windows x86_64
           - os: windows-latest
             python: "3.9"
@@ -123,26 +131,29 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
-      # Linux builds use zig: for aarch64 cross-compile AND for musllinux (Alpine) wheels
-      - name: Install zig (Linux only)
-        if: matrix.os == 'ubuntu-22.04' && contains(matrix.target, 'linux-gnu')
+      # Linux aarch64 (glibc) AND musllinux builds use zig as the C toolchain
+      # NOTE: macOS aarch64 does NOT need zig — the runner is natively ARM
+      - name: Install zig (Linux cross-compile / musl)
+        if: matrix.os == 'ubuntu-22.04' && (matrix.target == 'aarch64-unknown-linux-gnu' || contains(matrix.target, 'musl'))
         run: pip install ziglang
 
       - name: Build wheel
         shell: bash
         run: |
-          ARGS="--release --target ${{ matrix.target }} --out dist"
+          BASE_ARGS="--release --target ${{ matrix.target }} --out dist"
+          # zig ONLY for Linux aarch64 cross-compile and musl targets
+          # macOS aarch64 runners are natively ARM — never pass --zig
+          if [[ "${{ matrix.target }}" == *linux-gnu*aarch64* ]] || [[ "${{ matrix.target }}" == *musl* ]]; then
+            BASE_ARGS="$BASE_ARGS --zig"
+          fi
           if [ -n "${{ matrix.manylinux }}" ]; then
-            # emit both manylinux_2_17 (CentOS 7 / old glibc) and manylinux_2_28,
-            # plus musllinux_1_2 for Alpine / Docker (musl libc)
-            ARGS="$ARGS --manylinux 2_17 --manylinux 2_28"
-            ARGS="$ARGS --musllinux 1_2"
+            # Build with manylinux_2_28 primary tag, re-tag for 2_17
+            maturin build $BASE_ARGS --manylinux ${{ matrix.manylinux }}
+            maturin build $BASE_ARGS --manylinux 2_17
+          else
+            # Windows / macOS / musllinux: single build
+            maturin build $BASE_ARGS
           fi
-          # zig is required for aarch64 cross-compile and for musllinux builds
-          if [[ "${{ matrix.target }}" == aarch64-* ]] || [[ -n "${{ matrix.manylinux }}" ]]; then
-            ARGS="$ARGS --zig"
-          fi
-          maturin build $ARGS
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
