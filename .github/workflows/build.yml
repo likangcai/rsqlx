@@ -117,21 +117,21 @@ jobs:
             python: "3.13"
             target: x86_64-pc-windows-msvc
           # ── macOS x86_64 Intel (no container) ──
-          - os: macos-13
-            python: "3.9"
-            target: x86_64-apple-darwin
-          - os: macos-13
-            python: "3.10"
-            target: x86_64-apple-darwin
-          - os: macos-13
-            python: "3.11"
-            target: x86_64-apple-darwin
-          - os: macos-13
-            python: "3.12"
-            target: x86_64-apple-darwin
-          - os: macos-13
-            python: "3.13"
-            target: x86_64-apple-darwin
+#          - os: macos-13
+#            python: "3.9"
+#            target: x86_64-apple-darwin
+#          - os: macos-13
+#            python: "3.10"
+#            target: x86_64-apple-darwin
+#          - os: macos-13
+#            python: "3.11"
+#            target: x86_64-apple-darwin
+#          - os: macos-13
+#            python: "3.12"
+#            target: x86_64-apple-darwin
+#          - os: macos-13
+#            python: "3.13"
+#            target: x86_64-apple-darwin
           # ── macOS aarch64 Apple Silicon (no container) ──
           - os: macos-14
             python: "3.9"
