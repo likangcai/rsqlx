@@ -898,7 +898,8 @@ pip uninstall rsqlx
 首次编译要下载并编译 sqlx、tokio、rustls 等依赖，release 模式 + LTO 可能要 5–15 分钟。用 debug 模式会快很多：
 
 ```bash
-git clone https://gitee.com/yingzi_shadow/rsqlx.git
+git clone https://github.com/likangcai/rsqlx.git
+# 或从 Gitee 镜像: git clone https://gitee.com/yingzi_shadow/rsqlx.git
 cd rsqlx
 pip install maturin
 maturin develop            # debug 模式
@@ -924,7 +925,8 @@ await rsqlx.connect(f"sqlite:{Path('data.db').as_posix()}")
 ## 4.5 从源码安装（开发者）
 
 ```bash
-git clone https://gitee.com/yingzi_shadow/rsqlx.git
+git clone https://github.com/likangcai/rsqlx.git
+# 或从 Gitee 镜像: git clone https://gitee.com/yingzi_shadow/rsqlx.git
 cd rsqlx
 
 # 创建虚拟环境

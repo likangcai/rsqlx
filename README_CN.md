@@ -7,7 +7,8 @@ Rust 驱动的 Python 异步数据库客户端，底层基于 [sqlx](https://git
 所有查询跑在一个全局的多线程 Tokio runtime 上，等待数据库返回期间释放 GIL，所以多线程 / 多协程场景下能真正并行。
 
 > 作者: Yingzi <yingzilkq@163.com>  
-> 仓库: https://gitee.com/yingzi_shadow/rsqlx  
+> 仓库: https://github.com/likangcai/rsqlx  
+> 镜像: https://gitee.com/yingzi_shadow/rsqlx  
 > 协议: MIT OR Apache-2.0
 
 ## 功能一览
@@ -381,6 +382,8 @@ cat sqlx/sqlx-postgres/src/types/info.rs
 
 - sqlx patch 升级（0.8.5 → 0.8.6）: rsqlx patch 升（0.1.0 → 0.1.1）
 - sqlx minor 升级（0.8 → 0.9）: rsqlx minor 升（0.1 → 0.2）
+
+版本策略：只需主版本号与 sqlx 保持一致（当前双方都是 `0.9`），补丁版本允许有差异——例如基于 sqlx `0.9.0` 的 rsqlx `0.9.2` 是正常情况，不需要强行对齐。`Cargo.toml`、`Cargo.lock`、`uv.lock`、`pyproject.toml` 四处 rsqlx 自身版本需保持一致。
 
 改 `Cargo.toml` 和 `pyproject.toml` 里的 `version`，然后:
 

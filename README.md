@@ -10,7 +10,8 @@ Every query runs on a shared multi-threaded Tokio runtime; the GIL is released
 while waiting for the database, so concurrent tasks and threads run in parallel.
 
 > Author: Yingzi <yingzilkq@163.com>  
-> Source: https://gitee.com/yingzi_shadow/rsqlx  
+> Source: https://github.com/likangcai/rsqlx  
+> Mirror: https://gitee.com/yingzi_shadow/rsqlx  
 > License: MIT OR Apache-2.0
 
 ## Features
@@ -341,6 +342,8 @@ When you do need the source (debugging type mappings, understanding API changes)
 
 - sqlx patch (0.8.5 → 0.8.6): rsqlx patch (0.1.0 → 0.1.1)
 - sqlx minor (0.8 → 0.9): rsqlx minor (0.1 → 0.2)
+
+Only the major version needs to stay in sync with sqlx (currently `0.9` for both). Patch versions may differ — e.g. rsqlx `0.9.2` built on sqlx `0.9.0` is expected and does not need alignment. Keep `Cargo.toml`, `Cargo.lock`, `uv.lock` and `pyproject.toml` at the same rsqlx version.
 
 Update `version` in `Cargo.toml` and `pyproject.toml`, then:
 

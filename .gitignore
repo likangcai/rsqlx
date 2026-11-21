@@ -10,3 +10,4 @@ __pycache__/
 .vscode/
 Dockerfile
 CHANGELOG.md
+DEVELOPMENT.md
