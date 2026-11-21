@@ -395,7 +395,7 @@ cat sqlx/sqlx-postgres/src/types/info.rs
 - sqlx patch 升级（0.8.5 → 0.8.6）: rsqlx patch 升（0.1.0 → 0.1.1）
 - sqlx minor 升级（0.8 → 0.9）: rsqlx minor 升（0.1 → 0.2）
 
-版本策略：只需主版本号与 sqlx 保持一致（当前双方都是 `0.9`），补丁版本允许有差异——例如基于 sqlx `0.9.0` 的 rsqlx `0.9.2` 是正常情况，不需要强行对齐。`Cargo.toml`、`Cargo.lock`、`uv.lock`、`pyproject.toml` 四处 rsqlx 自身版本需保持一致。
+版本策略：只需主版本号与 sqlx 保持一致（当前双方都是 `0.9`），补丁版本允许有差异——例如基于 sqlx `0.9.0` 的 rsqlx `0.9.3` 是正常情况，不需要强行对齐。`Cargo.toml`、`Cargo.lock`、`uv.lock`、`pyproject.toml` 四处 rsqlx 自身版本需保持一致。
 
 改 `Cargo.toml` 和 `pyproject.toml` 里的 `version`，然后:
 
