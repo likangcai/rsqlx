@@ -115,6 +115,29 @@ pytest tests/
 ```
 
 SQLite tests always run. PostgreSQL/MySQL live tests require
-`RSQLX_TEST_PG_URL` / `RSQLX_TEST_MYSQL_URL`; otherwise they are skipped.
-DSN translation, dialect registration and placeholder compilation are covered
-offline.
+`RSQLX_TEST_PG_URL` / `RSQLX_TEST_MYSQL_URL` set to **SQLAlchemy URL format**
+(with the `+rsqlx` driver suffix); otherwise they are skipped.
+
+```powershell
+# Windows PowerShell
+$env:RSQLX_TEST_PG_URL    = "postgresql+rsqlx://user:pass@127.0.0.1:5432/db"
+$env:RSQLX_TEST_MYSQL_URL = "mysql+rsqlx://user:pass@127.0.0.1:3306/db?ssl-mode=disabled"
+python -m pytest tests/ -q
+```
+
+```bash
+# Linux / macOS
+export RSQLX_TEST_PG_URL="postgresql+rsqlx://user:pass@127.0.0.1:5432/db"
+export RSQLX_TEST_MYSQL_URL="mysql+rsqlx://user:pass@127.0.0.1:3306/db?ssl-mode=disabled"
+python -m pytest tests/ -q
+```
+
+Live tests cover: CRUD, transaction commit/rollback, batch insert,
+datetime/Decimal/UUID/JSON/bytes round-trip, `lastrowid`, exception mapping
+(`IntegrityError` / `ProgrammingError`), and `Row` attribute/index/mapping
+access. DSN translation, dialect registration and placeholder compilation are
+covered offline.
+
+Note: rsqlx driver URLs (`postgres://`, `mysql://`) are NOT valid for
+`RSQLX_TEST_*_URL` — SQLAlchemy would load the default sync driver instead of
+the rsqlx dialect. Always include `+rsqlx`.

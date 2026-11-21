@@ -334,8 +334,17 @@ def test_migrate(tmp_path):
 
 # ---------------------------------------------------------------- env-gated PG/MySQL
 
-PG_URL = os.environ.get("RSQLX_TEST_PG_URL")
-MY_URL = os.environ.get("RSQLX_TEST_MYSQL_URL")
+def _to_native_dsn(url):
+    """Accept both rsqlx DSNs and SQLAlchemy-style ``+rsqlx`` URLs."""
+    if not url:
+        return url
+    return url.replace("postgresql+rsqlx://", "postgres://", 1).replace(
+        "mysql+rsqlx://", "mysql://", 1
+    )
+
+
+PG_URL = _to_native_dsn(os.environ.get("RSQLX_TEST_PG_URL"))
+MY_URL = _to_native_dsn(os.environ.get("RSQLX_TEST_MYSQL_URL"))
 
 @pytest.mark.skipif(not PG_URL, reason="set RSQLX_TEST_PG_URL to run")
 def test_postgres():

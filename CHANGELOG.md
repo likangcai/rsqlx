@@ -10,6 +10,13 @@
 - `Pool.describe(sql)` / `Transaction.describe(sql)`：返回语句列名但不拉取数据行，供框架适配层构造 DBAPI `description`；基于 sqlx `prepare()`，不启用额外 feature，也不重写 SQL
 - 新增独立的 `sqlalchemy-rsqlx` 方言包子项目（SQLAlchemy 2.0 async，支持 PG / MySQL / SQLite）
 
+### 修复与验证
+
+- MySQL 方言补齐 `_detect_charset()` 与 `_extract_error_code()`，兼容 SQLAlchemy 2.0 方言初始化；错误码提取对 SQLSTATE 字符串（如 `42S02`）容错
+- PG / MySQL 实库集成测试全部跑通（0 跳过）：覆盖 CRUD、事务提交/回滚、批量插入、datetime / Decimal / UUID / JSON / bytes 往返、`lastrowid`、异常映射与 `Row` 多方式访问
+- 核心测试支持 `RSQLX_TEST_*_URL` 同时接受原生 DSN 与 SQLAlchemy `+rsqlx` URL 格式，消除两套测试的环境变量冲突
+- CI 新增 `live-db` job，使用 PostgreSQL 18 / MySQL 8 service containers 跑实库集成测试
+
 ### 文档与元数据
 
 - 补充 GitHub 仓库地址 `https://github.com/likangcai/rsqlx`，Gitee 保留为镜像（README 中英版、`Cargo.toml`、`DEVELOPMENT.md`）

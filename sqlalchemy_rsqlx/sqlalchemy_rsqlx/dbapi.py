@@ -273,6 +273,10 @@ class AsyncAdapt_rsqlx_connection:
         self.autocommit = False
         self._closed = False
 
+    def character_set_name(self) -> str:
+        """DBAPI-level charset, used by SQLAlchemy's MySQL dialect on init."""
+        return "utf8mb4"
+
     @property
     def isolation_level(self) -> str:
         return "AUTOCOMMIT" if self.autocommit else "DEFERRED"

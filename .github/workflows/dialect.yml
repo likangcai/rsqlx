@@ -46,5 +46,53 @@ jobs:
       - name: Install dialect package
         run: python -m pip install -e ./sqlalchemy_rsqlx
 
-      - name: Run dialect tests
+      - name: Run dialect tests (SQLite + offline checks)
+        run: python -m pytest sqlalchemy_rsqlx/tests -q
+
+  live-db:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: rsqlx_test
+          POSTGRES_PASSWORD: rsqlx_test_pw
+          POSTGRES_DB: rsqlx_test_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rsqlx_test_pw
+          MYSQL_DATABASE: rsqlx_test_db
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -prosqlx_test_pw"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install build tools
+        run: python -m pip install --upgrade pip maturin pytest
+      - name: Build rsqlx
+        shell: bash
+        run: |
+          maturin build -o dist
+          python -m pip install --force-reinstall --no-deps dist/rsqlx-*.whl
+      - name: Install dialect package
+        run: python -m pip install -e ./sqlalchemy_rsqlx
+      - name: Run full integration suite with live databases
+        env:
+          RSQLX_TEST_PG_URL: postgresql+rsqlx://rsqlx_test:rsqlx_test_pw@127.0.0.1:5432/rsqlx_test_db
+          RSQLX_TEST_MYSQL_URL: mysql+rsqlx://root:rsqlx_test_pw@127.0.0.1:3306/rsqlx_test_db
         run: python -m pytest sqlalchemy_rsqlx/tests -q
