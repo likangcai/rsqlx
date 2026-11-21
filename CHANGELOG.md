@@ -4,6 +4,12 @@
 
 ## [0.9.2] - 2026-11-21
 
+### 新增
+
+- `fetch` / `fetch_one` / `fetch_optional` / `fetch_raw` 增加可选 `row_factory` 参数，支持 `"dict"`（默认）、`"tuple"`、`"namedtuple"`；默认行为与 `list[dict]` 输出完全不变。为 SQLAlchemy 方言层提供 tuple 输出以避免 dict→tuple 转换开销
+- `Pool.describe(sql)` / `Transaction.describe(sql)`：返回语句列名但不拉取数据行，供框架适配层构造 DBAPI `description`；基于 sqlx `prepare()`，不启用额外 feature，也不重写 SQL
+- 新增独立的 `sqlalchemy-rsqlx` 方言包子项目（SQLAlchemy 2.0 async，支持 PG / MySQL / SQLite）
+
 ### 文档与元数据
 
 - 补充 GitHub 仓库地址 `https://github.com/likangcai/rsqlx`，Gitee 保留为镜像（README 中英版、`Cargo.toml`、`DEVELOPMENT.md`）

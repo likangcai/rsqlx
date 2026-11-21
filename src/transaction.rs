@@ -4,12 +4,12 @@
 //! `rsqlx.Transaction`: a database transaction.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyList;
 use sqlx::mysql::MySql;
 use sqlx::postgres::Postgres;
 use sqlx::sqlite::Sqlite;
 
-use crate::backend::{self, TxB};
+use crate::backend::{self, RowFactory, TxB};
 use crate::params;
 
 /// A transaction started with `pool.begin()`.
@@ -48,37 +48,70 @@ fn convert_params(params: Option<Py<PyAny>>) -> PyResult<Vec<params::PyParam>> {
 #[pymethods]
 impl Transaction {
     /// Execute a query inside the transaction, returning all rows.
-    #[pyo3(signature = (query, params = None))]
-    async fn fetch(&self, query: String, params: Option<Py<PyAny>>) -> PyResult<Py<PyList>> {
+    #[pyo3(signature = (query, params = None, row_factory = None))]
+    async fn fetch(
+        &self,
+        query: String,
+        params: Option<Py<PyAny>>,
+        row_factory: Option<String>,
+    ) -> PyResult<Py<PyList>> {
         let params = convert_params(params)?;
+        let factory = RowFactory::parse(row_factory)?;
         match &self.inner {
-            TxB::Pg(t) => backend::tx_fetch_rows::<Postgres>(t.clone(), query, params).await,
-            TxB::MySql(t) => backend::tx_fetch_rows::<MySql>(t.clone(), query, params).await,
-            TxB::Sqlite(t) => backend::tx_fetch_rows::<Sqlite>(t.clone(), query, params).await,
+            TxB::Pg(t) => {
+                backend::tx_fetch_rows::<Postgres>(t.clone(), query, params, factory).await
+            }
+            TxB::MySql(t) => {
+                backend::tx_fetch_rows::<MySql>(t.clone(), query, params, factory).await
+            }
+            TxB::Sqlite(t) => {
+                backend::tx_fetch_rows::<Sqlite>(t.clone(), query, params, factory).await
+            }
         }
     }
 
     /// Execute a query inside the transaction, returning exactly one row.
-    #[pyo3(signature = (query, params = None))]
-    async fn fetch_one(&self, query: String, params: Option<Py<PyAny>>) -> PyResult<Py<PyDict>> {
-        let row = self.fetch_optional(query, params).await?;
+    #[pyo3(signature = (query, params = None, row_factory = None))]
+    async fn fetch_one(
+        &self,
+        query: String,
+        params: Option<Py<PyAny>>,
+        row_factory: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let row = self.fetch_optional(query, params, row_factory).await?;
         row.ok_or_else(|| crate::RowNotFound::new_err("no rows were returned by the query"))
     }
 
     /// Execute a query inside the transaction, returning one row or `None`.
-    #[pyo3(signature = (query, params = None))]
+    #[pyo3(signature = (query, params = None, row_factory = None))]
     async fn fetch_optional(
         &self,
         query: String,
         params: Option<Py<PyAny>>,
-    ) -> PyResult<Option<Py<PyDict>>> {
+        row_factory: Option<String>,
+    ) -> PyResult<Option<Py<PyAny>>> {
         let params = convert_params(params)?;
+        let factory = RowFactory::parse(row_factory)?;
         match &self.inner {
-            TxB::Pg(t) => backend::tx_fetch_optional::<Postgres>(t.clone(), query, params).await,
-            TxB::MySql(t) => backend::tx_fetch_optional::<MySql>(t.clone(), query, params).await,
-            TxB::Sqlite(t) => {
-                backend::tx_fetch_optional::<Sqlite>(t.clone(), query, params).await
+            TxB::Pg(t) => {
+                backend::tx_fetch_optional::<Postgres>(t.clone(), query, params, factory).await
             }
+            TxB::MySql(t) => {
+                backend::tx_fetch_optional::<MySql>(t.clone(), query, params, factory).await
+            }
+            TxB::Sqlite(t) => {
+                backend::tx_fetch_optional::<Sqlite>(t.clone(), query, params, factory).await
+            }
+        }
+    }
+
+    /// Return the column names a statement would produce, using this transaction's connection.
+    #[pyo3(signature = (sql,))]
+    async fn describe(&self, sql: String) -> PyResult<Vec<String>> {
+        match &self.inner {
+            TxB::Pg(t) => backend::tx_describe::<Postgres>(t.clone(), sql).await,
+            TxB::MySql(t) => backend::tx_describe::<MySql>(t.clone(), sql).await,
+            TxB::Sqlite(t) => backend::tx_describe::<Sqlite>(t.clone(), sql).await,
         }
     }
 

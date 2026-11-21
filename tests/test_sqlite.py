@@ -54,6 +54,47 @@ def test_version_and_exceptions(pool):
     assert issubclass(rsqlx.PoolTimedOut, rsqlx.Error)
 
 
+def test_row_factory(pool):
+    async def main():
+        await _setup(pool)
+        await pool.execute(
+            "INSERT INTO t (name, price, flag) VALUES (?, ?, ?)", ["a", 1.5, True]
+        )
+
+        # default stays list[dict]
+        assert await pool.fetch("SELECT name, price FROM t") == [
+            {"name": "a", "price": 1.5}
+        ]
+
+        assert await pool.fetch("SELECT name, price FROM t", row_factory="tuple") == [
+            ("a", 1.5)
+        ]
+
+        named = await pool.fetch("SELECT name, price FROM t", row_factory="namedtuple")
+        assert named[0].name == "a"
+        assert named[0][1] == 1.5
+        assert tuple(named[0]) == ("a", 1.5)
+
+        assert await pool.fetch_one("SELECT name FROM t", row_factory="tuple") == ("a",)
+        assert (
+            await pool.fetch_optional("SELECT name FROM t WHERE 0", row_factory="tuple")
+            is None
+        )
+        assert await pool.fetch_raw("SELECT name FROM t", row_factory="tuple") == [
+            ("a",)
+        ]
+
+        async with await pool.begin() as tx:
+            assert await tx.fetch("SELECT name FROM t", row_factory="tuple") == [
+                ("a",)
+            ]
+
+        with pytest.raises(ValueError):
+            await pool.fetch("SELECT name FROM t", row_factory="bogus")
+
+    run(main())
+
+
 def test_connect_memory():
     async def main():
         pool = await rsqlx.connect("sqlite::memory:")

@@ -195,19 +195,32 @@ Timeout arguments are in seconds (`float`).
 
 | Method | Description |
 |--------|-------------|
-| `await fetch(sql, params=None) -> list[dict]` | All rows as dicts |
-| `await fetch_one(sql, params=None) -> dict` | One row; raises `RowNotFound` if none |
-| `await fetch_optional(sql, params=None) -> dict | None` | One row or None |
+| `await fetch(sql, params=None, row_factory=None) -> list` | All rows; `row_factory` selects row type |
+| `await fetch_one(sql, params=None, row_factory=None)` | One row; raises `RowNotFound` if none |
+| `await fetch_optional(sql, params=None, row_factory=None)` | One row or None |
 | `await execute(sql, params=None) -> ExecuteResult` | Returns rows_affected and last_insert_id |
 | `await execute_many(sql, params) -> ExecuteResult` | Batch; INSERT auto-optimized to multi-row |
 | `await execute_raw(sql)` | Raw query protocol (no parameter binding) — for stored procedures, DDL |
-| `await fetch_raw(sql) -> list[dict]` | Raw query protocol with row results |
+| `await fetch_raw(sql, row_factory=None)` | Raw query protocol with row results |
+| `await describe(sql) -> list[str]` | Column names of a statement, without fetching rows |
 | `await begin() -> Transaction` | Start a transaction |
 | `await migrate(path)` | Run SQL migration files from a directory |
 | `await close()` | Close the pool |
 | `size` / `num_idle` / `is_closed` | Pool introspection |
 
 Pool and Transaction support `async with`.
+
+### Row factory
+
+`fetch` / `fetch_one` / `fetch_optional` / `fetch_raw` (on both `Pool` and
+`Transaction`) accept a keyword-only `row_factory`:
+
+- `None` or `"dict"` (default): `dict` rows — the original `list[dict]` behaviour, unchanged
+- `"tuple"`: positional tuples, marginally faster because no key strings are built
+- `"namedtuple"`: `collections.namedtuple` rows with attributes named after columns
+
+Invalid values raise `ValueError`. The default path is unchanged and
+backward-compatible; the row factory is chosen once per call, not per row.
 
 ### Parameter Types
 

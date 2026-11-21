@@ -91,12 +91,12 @@ def test_api_surface():
     # Pool methods return coroutines (pyo3 async fn wrappers)
     async_method_names = ["fetch", "fetch_one", "fetch_optional", "execute",
                           "execute_many", "begin", "migrate", "close",
-                          "execute_raw", "fetch_raw", "__aenter__", "__aexit__"]
+                          "execute_raw", "fetch_raw", "describe", "__aenter__", "__aexit__"]
     for name in async_method_names:
         method = getattr(rsqlx.Pool, name, None)
         if method is None:
             fail(f"Pool.{name} missing")
-    ok("Pool: all 12 async methods present")
+    ok("Pool: all 13 async methods present")
 
     # sync getters — pyo3 的 #[getter] 生成的是 C 层 getset_descriptor，
     # 不是 Python 的 property 对象，所以用 hasattr(描述符协议) 检查

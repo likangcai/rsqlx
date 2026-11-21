@@ -189,19 +189,31 @@ await pool.migrate("migrations")
 
 | 方法 | 说明 |
 |------|------|
-| `await fetch(sql, params=None) -> list[dict]` | 返回所有行 |
-| `await fetch_one(sql, params=None) -> dict` | 返回一行，无行时抛 `RowNotFound` |
-| `await fetch_optional(sql, params=None) -> dict | None` | 返回一行或 None |
+| `await fetch(sql, params=None, row_factory=None)` | 返回所有行，行类型由 row_factory 决定 |
+| `await fetch_one(sql, params=None, row_factory=None)` | 返回一行，无行时抛 `RowNotFound` |
+| `await fetch_optional(sql, params=None, row_factory=None)` | 返回一行或 None |
 | `await execute(sql, params=None) -> ExecuteResult` | 执行语句，返回影响行数和 last_insert_id |
 | `await execute_many(sql, params) -> ExecuteResult` | 批量执行，INSERT 自动优化为多值 |
 | `await execute_raw(sql)` | 原生查询协议（无参数绑定），用于存储过程等 |
-| `await fetch_raw(sql) -> list[dict]` | 原生查询协议带返回行 |
+| `await fetch_raw(sql, row_factory=None)` | 原生查询协议带返回行 |
+| `await describe(sql) -> list[str]` | 返回语句的列名，不拉取数据行 |
 | `await begin() -> Transaction` | 开启事务 |
 | `await migrate(path)` | 执行迁移目录中的 SQL 文件 |
 | `await close()` | 关闭连接池 |
 | `size` / `num_idle` / `is_closed` | 连接池状态 |
 
 Pool 和 Transaction 都支持 `async with`。
+
+### 行工厂（row_factory）
+
+`Pool` 和 `Transaction` 的 `fetch` / `fetch_one` / `fetch_optional` / `fetch_raw`
+都接受关键字参数 `row_factory`：
+
+- `None` 或 `"dict"`（默认）：`dict` 行，即原有的 `list[dict]` 行为，完全不变
+- `"tuple"`：位置元组，因不需要构造键字符串而略快
+- `"namedtuple"`：`collections.namedtuple` 行，属性名对应列名
+
+传入其它值抛 `ValueError`。默认路径保持向后兼容；行工厂每次调用只解析一次，不是逐行解析。
 
 ### 参数类型
 

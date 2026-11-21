@@ -6,12 +6,12 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyList;
 use sqlx::mysql::MySql;
 use sqlx::postgres::Postgres;
 use sqlx::sqlite::Sqlite;
 
-use crate::backend::{self, Backend};
+use crate::backend::{self, Backend, RowFactory};
 use crate::params;
 use crate::transaction::Transaction;
 
@@ -67,44 +67,64 @@ fn convert_params_many(params: Option<Py<PyAny>>) -> PyResult<Vec<Vec<params::Py
 
 #[pymethods]
 impl Pool {
-    /// Execute a query and return all rows as a list of dicts.
-    #[pyo3(signature = (query, params = None))]
-    async fn fetch(&self, query: String, params: Option<Py<PyAny>>) -> PyResult<Py<PyList>> {
+    /// Execute a query and return all rows.
+    ///
+    /// `row_factory` selects the row type: `None`/`"dict"` (default, keeps the
+    /// historical `list[dict]` behaviour), `"tuple"`, or `"namedtuple"`.
+    #[pyo3(signature = (query, params = None, row_factory = None))]
+    async fn fetch(
+        &self,
+        query: String,
+        params: Option<Py<PyAny>>,
+        row_factory: Option<String>,
+    ) -> PyResult<Py<PyList>> {
         let params = convert_params(params)?;
+        let factory = RowFactory::parse(row_factory)?;
         match &self.inner {
-            Backend::Pg(p) => backend::pool_fetch_rows::<Postgres>(p.clone(), query, params).await,
-            Backend::MySql(p) => backend::pool_fetch_rows::<MySql>(p.clone(), query, params).await,
+            Backend::Pg(p) => {
+                backend::pool_fetch_rows::<Postgres>(p.clone(), query, params, factory).await
+            }
+            Backend::MySql(p) => {
+                backend::pool_fetch_rows::<MySql>(p.clone(), query, params, factory).await
+            }
             Backend::Sqlite(p) => {
-                backend::pool_fetch_rows::<Sqlite>(p.clone(), query, params).await
+                backend::pool_fetch_rows::<Sqlite>(p.clone(), query, params, factory).await
             }
         }
     }
 
     /// Execute a query and return exactly one row; raises `rsqlx.RowNotFound`
     /// if the query returned no rows.
-    #[pyo3(signature = (query, params = None))]
-    async fn fetch_one(&self, query: String, params: Option<Py<PyAny>>) -> PyResult<Py<PyDict>> {
-        let row = self.fetch_optional(query, params).await?;
+    #[pyo3(signature = (query, params = None, row_factory = None))]
+    async fn fetch_one(
+        &self,
+        query: String,
+        params: Option<Py<PyAny>>,
+        row_factory: Option<String>,
+    ) -> PyResult<Py<PyAny>> {
+        let row = self.fetch_optional(query, params, row_factory).await?;
         row.ok_or_else(|| crate::RowNotFound::new_err("no rows were returned by the query"))
     }
 
     /// Execute a query and return one row or `None`.
-    #[pyo3(signature = (query, params = None))]
+    #[pyo3(signature = (query, params = None, row_factory = None))]
     async fn fetch_optional(
         &self,
         query: String,
         params: Option<Py<PyAny>>,
-    ) -> PyResult<Option<Py<PyDict>>> {
+        row_factory: Option<String>,
+    ) -> PyResult<Option<Py<PyAny>>> {
         let params = convert_params(params)?;
+        let factory = RowFactory::parse(row_factory)?;
         match &self.inner {
             Backend::Pg(p) => {
-                backend::pool_fetch_optional::<Postgres>(p.clone(), query, params).await
+                backend::pool_fetch_optional::<Postgres>(p.clone(), query, params, factory).await
             }
             Backend::MySql(p) => {
-                backend::pool_fetch_optional::<MySql>(p.clone(), query, params).await
+                backend::pool_fetch_optional::<MySql>(p.clone(), query, params, factory).await
             }
             Backend::Sqlite(p) => {
-                backend::pool_fetch_optional::<Sqlite>(p.clone(), query, params).await
+                backend::pool_fetch_optional::<Sqlite>(p.clone(), query, params, factory).await
             }
         }
     }
@@ -192,16 +212,22 @@ impl Pool {
         }
     }
 
-    /// Execute a raw SQL string and return rows as a list of dicts.
+    /// Execute a raw SQL string and return rows.
     ///
     /// Like :meth:`execute_raw`, uses the simple query protocol (no
     /// parameter binding). Useful for stored procedure calls that return
     /// result sets.
-    async fn fetch_raw(&self, sql: String) -> PyResult<Py<PyList>> {
+    #[pyo3(signature = (sql, row_factory = None))]
+    async fn fetch_raw(
+        &self,
+        sql: String,
+        row_factory: Option<String>,
+    ) -> PyResult<Py<PyList>> {
+        let factory = RowFactory::parse(row_factory)?;
         match &self.inner {
-            Backend::Pg(p) => backend::pool_fetch_raw::<Postgres>(p.clone(), sql).await,
-            Backend::MySql(p) => backend::pool_fetch_raw::<MySql>(p.clone(), sql).await,
-            Backend::Sqlite(p) => backend::pool_fetch_raw::<Sqlite>(p.clone(), sql).await,
+            Backend::Pg(p) => backend::pool_fetch_raw::<Postgres>(p.clone(), sql, factory).await,
+            Backend::MySql(p) => backend::pool_fetch_raw::<MySql>(p.clone(), sql, factory).await,
+            Backend::Sqlite(p) => backend::pool_fetch_raw::<Sqlite>(p.clone(), sql, factory).await,
         }
     }
 
@@ -212,6 +238,16 @@ impl Pool {
             Backend::Pg(p) => backend::pool_migrate::<Postgres>(p.clone(), path).await,
             Backend::MySql(p) => backend::pool_migrate::<MySql>(p.clone(), path).await,
             Backend::Sqlite(p) => backend::pool_migrate::<Sqlite>(p.clone(), path).await,
+        }
+    }
+
+    /// Return the column names a statement would produce, without fetching rows.
+    #[pyo3(signature = (sql,))]
+    async fn describe(&self, sql: String) -> PyResult<Vec<String>> {
+        match &self.inner {
+            Backend::Pg(p) => backend::pool_describe::<Postgres>(p.clone(), sql).await,
+            Backend::MySql(p) => backend::pool_describe::<MySql>(p.clone(), sql).await,
+            Backend::Sqlite(p) => backend::pool_describe::<Sqlite>(p.clone(), sql).await,
         }
     }
 

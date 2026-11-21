@@ -4,19 +4,20 @@
 //! Backend dispatch: parameter binding, row decoding and generic query execution
 //! for PostgreSQL / MySQL / SQLite.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use pyo3::conversion::IntoPyObjectExt;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 use rust_decimal::Decimal;
 use serde_json::Value;
 use sqlx::mysql::{MySql, MySqlPool};
 use sqlx::postgres::{PgPool, PgRow, Postgres};
 use sqlx::query::Query;
 use sqlx::sqlite::{Sqlite, SqlitePool, SqliteRow};
-use sqlx::{Column, Database, Pool, Row, Transaction, TypeInfo, ValueRef as _};
+use sqlx::{Column, Database, Executor, Pool, Row, Statement, Transaction, TypeInfo, ValueRef as _};
 
 use crate::params::PyParam;
 
@@ -34,6 +35,68 @@ pub enum TxB {
     Pg(Arc<TxMutex<Postgres>>),
     MySql(Arc<TxMutex<MySql>>),
     Sqlite(Arc<TxMutex<Sqlite>>),
+}
+
+/// Output format for row-producing methods.  `Dict` is the default and
+/// preserves the historical `list[dict]` behaviour exactly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowFactory {
+    Dict,
+    Tuple,
+    NamedTuple,
+}
+
+impl RowFactory {
+    pub fn parse(value: Option<String>) -> PyResult<Self> {
+        match value.as_deref() {
+            None | Some("dict") => Ok(RowFactory::Dict),
+            Some("tuple") => Ok(RowFactory::Tuple),
+            Some("namedtuple") => Ok(RowFactory::NamedTuple),
+            Some(other) => Err(PyValueError::new_err(format!(
+                "unknown row_factory {other:?}; expected 'dict', 'tuple' or 'namedtuple'"
+            ))),
+        }
+    }
+}
+
+static NAMEDTUPLE_CACHE: OnceLock<Py<PyDict>> = OnceLock::new();
+
+/// Return (creating and caching if needed) a `collections.namedtuple` class
+/// for the given column names.
+fn namedtuple_class(py: Python<'_>, names: &[&str]) -> PyResult<Py<PyAny>> {
+    let cache = NAMEDTUPLE_CACHE.get_or_init(|| PyDict::new(py).unbind());
+    let key = PyTuple::new(py, names)?;
+    if let Some(cls) = cache.bind(py).get_item(&key)? {
+        return Ok(cls.unbind());
+    }
+    let collections = py.import("collections")?;
+    let cls = collections.getattr("namedtuple")?.call1(("Row", key.clone()))?;
+    cache.bind(py).set_item(&key, &cls)?;
+    Ok(cls.unbind())
+}
+
+/// Assemble decoded column values into the requested Python row type.
+fn finish_row<'py>(
+    py: Python<'py>,
+    values: Vec<Bound<'py, PyAny>>,
+    names: Vec<&str>,
+    factory: RowFactory,
+) -> PyResult<Py<PyAny>> {
+    match factory {
+        RowFactory::Dict => {
+            let dict = PyDict::new(py);
+            for (name, value) in names.into_iter().zip(values) {
+                dict.set_item(name, value)?;
+            }
+            Ok(dict.unbind().into_any())
+        }
+        RowFactory::Tuple => Ok(PyTuple::new(py, values)?.unbind().into_any()),
+        RowFactory::NamedTuple => {
+            let cls = namedtuple_class(py, &names)?;
+            let args = PyTuple::new(py, values)?;
+            Ok(cls.bind(py).call1(args)?.unbind())
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +408,7 @@ where
         p: &PyParam,
     );
 
-    fn row_to_dict(py: Python<'_>, row: &Self::Row) -> PyResult<Py<PyDict>>;
+    fn row_to_py(py: Python<'_>, row: &Self::Row, factory: RowFactory) -> PyResult<Py<PyAny>>;
     fn result_summary(res: &Self::QueryResult) -> (u64, Option<i64>);
 }
 
@@ -372,14 +435,24 @@ impl DbExt for Postgres {
         }
     }
 
-    fn row_to_dict(py: Python<'_>, row: &PgRow) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new(py);
+    fn row_to_py(py: Python<'_>, row: &PgRow, factory: RowFactory) -> PyResult<Py<PyAny>> {
+        if factory == RowFactory::Dict {
+            let dict = PyDict::new(py);
+            for (i, col) in row.columns().iter().enumerate() {
+                let type_name = col.type_info().name();
+                let value = pg_value_to_py(py, row, i, type_name, col.name())?;
+                dict.set_item(col.name(), value)?;
+            }
+            return Ok(dict.unbind().into_any());
+        }
+        let mut values = Vec::with_capacity(row.columns().len());
+        let mut names = Vec::with_capacity(row.columns().len());
         for (i, col) in row.columns().iter().enumerate() {
             let type_name = col.type_info().name();
-            let value = pg_value_to_py(py, row, i, type_name, col.name())?;
-            dict.set_item(col.name(), value)?;
+            values.push(pg_value_to_py(py, row, i, type_name, col.name())?);
+            names.push(col.name());
         }
-        Ok(dict.unbind())
+        finish_row(py, values, names, factory)
     }
 
     fn push_bind(
@@ -545,14 +618,28 @@ impl DbExt for MySql {
         }
     }
 
-    fn row_to_dict(py: Python<'_>, row: &sqlx::mysql::MySqlRow) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new(py);
+    fn row_to_py(
+        py: Python<'_>,
+        row: &sqlx::mysql::MySqlRow,
+        factory: RowFactory,
+    ) -> PyResult<Py<PyAny>> {
+        if factory == RowFactory::Dict {
+            let dict = PyDict::new(py);
+            for (i, col) in row.columns().iter().enumerate() {
+                let type_name = col.type_info().name();
+                let value = mysql_value_to_py(py, row, i, type_name, col.name())?;
+                dict.set_item(col.name(), value)?;
+            }
+            return Ok(dict.unbind().into_any());
+        }
+        let mut values = Vec::with_capacity(row.columns().len());
+        let mut names = Vec::with_capacity(row.columns().len());
         for (i, col) in row.columns().iter().enumerate() {
             let type_name = col.type_info().name();
-            let value = mysql_value_to_py(py, row, i, type_name, col.name())?;
-            dict.set_item(col.name(), value)?;
+            values.push(mysql_value_to_py(py, row, i, type_name, col.name())?);
+            names.push(col.name());
         }
-        Ok(dict.unbind())
+        finish_row(py, values, names, factory)
     }
 
     fn push_bind(
@@ -613,14 +700,24 @@ impl DbExt for Sqlite {
         }
     }
 
-    fn row_to_dict(py: Python<'_>, row: &SqliteRow) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new(py);
+    fn row_to_py(py: Python<'_>, row: &SqliteRow, factory: RowFactory) -> PyResult<Py<PyAny>> {
+        if factory == RowFactory::Dict {
+            let dict = PyDict::new(py);
+            for (i, col) in row.columns().iter().enumerate() {
+                let declared = col.type_info().name();
+                let value = sqlite_value_to_py(py, row, i, declared, col.name())?;
+                dict.set_item(col.name(), value)?;
+            }
+            return Ok(dict.unbind().into_any());
+        }
+        let mut values = Vec::with_capacity(row.columns().len());
+        let mut names = Vec::with_capacity(row.columns().len());
         for (i, col) in row.columns().iter().enumerate() {
             let declared = col.type_info().name();
-            let value = sqlite_value_to_py(py, row, i, declared, col.name())?;
-            dict.set_item(col.name(), value)?;
+            values.push(sqlite_value_to_py(py, row, i, declared, col.name())?);
+            names.push(col.name());
         }
-        Ok(dict.unbind())
+        finish_row(py, values, names, factory)
     }
 
     fn push_bind(
@@ -653,7 +750,11 @@ impl DbExt for Sqlite {
     }
 }
 
-pub fn rows_to_list<DB>(py: Python<'_>, rows: Vec<DB::Row>) -> PyResult<Py<PyList>>
+pub fn rows_to_list<DB>(
+    py: Python<'_>,
+    rows: Vec<DB::Row>,
+    factory: RowFactory,
+) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
     DB::Row: Send,
@@ -661,7 +762,7 @@ where
 {
     let list = PyList::empty(py);
     for row in &rows {
-        list.append(DB::row_to_dict(py, row)?)?;
+        list.append(DB::row_to_py(py, row, factory)?)?;
     }
     Ok(list.unbind())
 }
@@ -674,6 +775,7 @@ pub async fn pool_fetch_rows<DB>(
     pool: Pool<DB>,
     sql: String,
     params: Vec<PyParam>,
+    factory: RowFactory,
 ) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
@@ -688,14 +790,15 @@ where
         q.fetch_all(&pool).await
     })
     .await?;
-    Python::with_gil(|py| rows_to_list::<DB>(py, rows))
+    Python::with_gil(|py| rows_to_list::<DB>(py, rows, factory))
 }
 
 pub async fn pool_fetch_optional<DB>(
     pool: Pool<DB>,
     sql: String,
     params: Vec<PyParam>,
-) -> PyResult<Option<Py<PyDict>>>
+    factory: RowFactory,
+) -> PyResult<Option<Py<PyAny>>>
 where
     DB: DbExt,
     <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
@@ -710,9 +813,30 @@ where
     })
     .await?;
     match row {
-        Some(row) => Python::with_gil(|py| DB::row_to_dict(py, &row).map(Some)),
+        Some(row) => Python::with_gil(|py| DB::row_to_py(py, &row, factory).map(Some)),
         None => Ok(None),
     }
+}
+
+/// Return the column names of a statement without fetching any rows.
+///
+/// Used by framework adapters to build a DBAPI `description` for empty result
+/// sets.  No SQL rewriting is performed.
+pub async fn pool_describe<DB>(pool: Pool<DB>, sql: String) -> PyResult<Vec<String>>
+where
+    DB: Database,
+    for<'c> &'c mut <DB as Database>::Connection: Executor<'c, Database = DB>,
+{
+    crate::runtime::run_db_task(async move {
+        let mut conn = pool.acquire().await?;
+        let statement = conn
+            .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(sql.as_str())))
+            .await?;
+        Ok::<Vec<String>, sqlx::Error>(
+            statement.columns().iter().map(|c| c.name().to_string()).collect(),
+        )
+    })
+    .await
 }
 
 pub async fn pool_execute<DB>(
@@ -927,7 +1051,11 @@ where
 }
 
 /// Fetch rows via a raw SQL string (simple query protocol, no parameters).
-pub async fn pool_fetch_raw<DB>(pool: Pool<DB>, sql: String) -> PyResult<Py<PyList>>
+pub async fn pool_fetch_raw<DB>(
+    pool: Pool<DB>,
+    sql: String,
+    factory: RowFactory,
+) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
     <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
@@ -937,7 +1065,7 @@ where
         sqlx::raw_sql(sqlx::AssertSqlSafe(sql)).fetch_all(&pool).await
     })
     .await?;
-    Python::with_gil(|py| rows_to_list::<DB>(py, rows))
+    Python::with_gil(|py| rows_to_list::<DB>(py, rows, factory))
 }
 
 pub fn pool_options<DB: Database>(
@@ -970,10 +1098,30 @@ pub fn pool_options<DB: Database>(
 // generic query execution (transaction)
 // ---------------------------------------------------------------------------
 
+/// Return column names using the transaction's own connection.
+pub async fn tx_describe<DB>(tx: Arc<TxMutex<DB>>, sql: String) -> PyResult<Vec<String>>
+where
+    DB: Database,
+    for<'c> &'c mut <DB as Database>::Connection: Executor<'c, Database = DB>,
+{
+    crate::runtime::run_db_task(async move {
+        let mut guard = tx.lock().await;
+        let transaction = guard.as_mut().ok_or_else(crate::error::tx_finished)?;
+        let statement = transaction
+            .prepare(sqlx::SqlSafeStr::into_sql_str(sqlx::AssertSqlSafe(sql.as_str())))
+            .await?;
+        Ok::<Vec<String>, sqlx::Error>(
+            statement.columns().iter().map(|c| c.name().to_string()).collect(),
+        )
+    })
+    .await
+}
+
 pub async fn tx_fetch_rows<DB>(
     tx: Arc<TxMutex<DB>>,
     sql: String,
     params: Vec<PyParam>,
+    factory: RowFactory,
 ) -> PyResult<Py<PyList>>
 where
     DB: DbExt,
@@ -992,14 +1140,15 @@ where
         q.fetch_all(&mut **t).await
     })
     .await?;
-    Python::with_gil(|py| rows_to_list::<DB>(py, rows))
+    Python::with_gil(|py| rows_to_list::<DB>(py, rows, factory))
 }
 
 pub async fn tx_fetch_optional<DB>(
     tx: Arc<TxMutex<DB>>,
     sql: String,
     params: Vec<PyParam>,
-) -> PyResult<Option<Py<PyDict>>>
+    factory: RowFactory,
+) -> PyResult<Option<Py<PyAny>>>
 where
     DB: DbExt,
     <DB as Database>::Arguments: sqlx::IntoArguments<DB>,
@@ -1018,7 +1167,7 @@ where
     })
     .await?;
     match row {
-        Some(row) => Python::with_gil(|py| DB::row_to_dict(py, &row).map(Some)),
+        Some(row) => Python::with_gil(|py| DB::row_to_py(py, &row, factory).map(Some)),
         None => Ok(None),
     }
 }
