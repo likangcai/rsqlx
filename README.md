@@ -12,6 +12,7 @@ while waiting for the database, so concurrent tasks and threads run in parallel.
 > Author: Yingzi <yingzilkq@163.com>  
 > Source: https://github.com/likangcai/rsqlx  
 > Mirror: https://gitee.com/yingzi_shadow/rsqlx  
+> Built on: [sqlx](https://github.com/launchbadge/sqlx) by the SQLx contributors — rsqlx is a Python async application of sqlx, not a fork of its source code  
 > License: MIT OR Apache-2.0
 
 ## Features
@@ -442,3 +443,13 @@ explicit patent grant.
 
 Copyright (C) rsqlx Contributors. Unless stated otherwise, contributions are
 dual-licensed under the same terms.
+
+## Acknowledgements
+
+rsqlx is built on top of **[sqlx](https://github.com/launchbadge/sqlx)** by the
+SQLx contributors, and is dual-licensed under the same MIT OR Apache-2.0 terms.
+Portions of this work are Copyright (C) SQLx Contributors (as noted in
+`LICENSE-MIT` and `LICENSE-APACHE`). rsqlx is an independent Python async
+application of sqlx — it is **not** a fork of the sqlx source tree and is not
+affiliated with or endorsed by the SQLx project. Thanks to the SQLx team for
+the excellent Rust SQL toolkit that makes this project possible.

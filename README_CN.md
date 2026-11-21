@@ -9,6 +9,7 @@ Rust 驱动的 Python 异步数据库客户端，底层基于 [sqlx](https://git
 > 作者: Yingzi <yingzilkq@163.com>  
 > 仓库: https://github.com/likangcai/rsqlx  
 > 镜像: https://gitee.com/yingzi_shadow/rsqlx  
+> 上游: [sqlx](https://github.com/launchbadge/sqlx) —— rsqlx 是 sqlx 在 Python 侧的异步分支应用，并非 sqlx 源码的 fork，感谢 SQLx 贡献者  
 > 协议: MIT OR Apache-2.0
 
 ## 功能一览
@@ -480,3 +481,7 @@ rsqlx 采用 **双许可**，你可以任选其一使用：
 只要最简单的条款选 **MIT**；想要明确的专利授权选 **Apache-2.0**。
 
 Copyright (C) rsqlx Contributors。除非另有说明，所有贡献也以相同的双许可条款授权。
+
+## 致谢
+
+rsqlx 构建于 SQLx 贡献者的 **[sqlx](https://github.com/launchbadge/sqlx)** 之上，并沿用相同的 MIT OR Apache-2.0 双许可。本项目部分内容版权归 SQLx Contributors 所有（见 `LICENSE-MIT` 与 `LICENSE-APACHE`）。rsqlx 是 sqlx 在 Python 侧的独立异步应用，**不是** sqlx 源码的 fork，也不隶属于 SQLx 官方项目、不代表其立场。感谢 SQLx 团队提供优秀的 Rust SQL 工具链，使本项目成为可能。

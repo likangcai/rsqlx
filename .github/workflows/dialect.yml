@@ -40,7 +40,7 @@ jobs:
       - name: Build and install rsqlx from source
         shell: bash
         run: |
-          maturin build -o dist
+          maturin build --release -o dist
           python -m pip install --force-reinstall --no-deps dist/rsqlx-*.whl
 
       - name: Install dialect package
@@ -87,7 +87,7 @@ jobs:
       - name: Build rsqlx
         shell: bash
         run: |
-          maturin build -o dist
+          maturin build --release -o dist
           python -m pip install --force-reinstall --no-deps dist/rsqlx-*.whl
       - name: Install dialect package
         run: python -m pip install -e ./sqlalchemy_rsqlx
