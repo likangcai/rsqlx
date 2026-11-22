@@ -127,3 +127,94 @@ rows = await pool.fetch("SELECT items FROM docs")
 - 绑定侧仅接受白名单类型；不支持的 Python 类型抛 `TypeError`
 - 超大 Python int（> 64 位）自动降级为 `Decimal`
 - `NUMERIC` / `DECIMAL` 使用 `rust_decimal`（约 96 位精度），超出范围的更高精度值不支持
+
+---
+
+## 6. 差异根因与补齐可行性
+
+差异并非来自"sqlx 做不到"，而是四类原因叠加。按可补齐性排序：
+
+### 6.1 根因 A：sqlx 可选 feature 未启用（最容易补齐）
+
+sqlx 把若干类型放在**默认关闭的 feature** 后面：
+
+| sqlx feature | 对应类型 | rsqlx 现状 |
+|---|---|---|
+| `bigdecimal` | 任意精度 NUMERIC | 仅 `rust_decimal`（~96 位） |
+| `ipnet` / `ipnetwork` | PG INET / CIDR | 明确报错 |
+| `mac_address` | PG MACADDR | 明确报错 |
+| `bit-vec` | PG BIT / VARBIT | 明确报错 |
+| `time` | PG TIMETZ 等 time crate 类型 | 明确报错 |
+
+**原因**：rsqlx 的 `Cargo.toml` 只启用了 `runtime-tokio`、`tls-rustls-ring`、
+三库驱动、`chrono`、`uuid`、`rust_decimal`、`migrate`、`json`，刻意保持依赖精简
+和 wheel 体积可控。
+
+**能否补齐**：可以，启用对应 feature + 在 `backend.rs` 加解码分支 + 定义 Python
+表示（如 `ipaddress.IPv4Address`、`decimal.Decimal`）。代价是：
+- 新增 Rust 依赖 → wheel 体积和编译时间增加
+- 需为每种类型设计 Python↔Rust 映射，并补三库对称测试
+
+**建议**：按用户需求分批启用。最高价值是 `bigdecimal`（精度问题影响财务场景）
+和 `ipnet`（网络地址常见于 PG）。
+
+### 6.2 根因 B：Python 类型系统无直接对应（部分支持，可语义化补齐）
+
+| 类型 | sqlx 表示 | Python 困境 |
+|---|---|---|
+| PG `INTERVAL` | `PgInterval { months: i32, days: i32, microseconds: i64 }` | `datetime.timedelta` **无"月"字段**（月长不固定，无法无损转换） |
+| PG range（6 种） | `Range<T>` + `Bound<T>`（含/不含边界、无界） | Python 无内置 range 对象能表达开闭区间和无界 |
+| PG composite / domain / enum / record | `#[derive(Type)]` 的 Rust 结构体 | Python 侧没有列类型元数据，无法自动构造对应对象 |
+| MySQL `TIME` 全范围 | `MySqlTime`（负数、±838:59:59、微秒） | `datetime.time` 只表示 time-of-day（0–23:59:59） |
+| 单字节 `"CHAR"` | `i8` | 返回 `str` 是 Python 直觉选择 |
+
+**能否补齐**：可以做"有损但合理"的映射，但无法无损：
+- `INTERVAL` → 自定义 `rsqlx.Interval(months, days, microseconds)` 或返回 `timedelta`（丢失月）
+- range → `tuple` 或自定义 `rsqlx.Range` 类
+- MySQL TIME → `timedelta` 而非 `time`（可表达负数和超 24 小时）
+
+**建议**：这是 API 设计决策，不是实现障碍。若用户场景需要，可新增 `rsqlx.Interval` /
+`rsqlx.Range` 等类型，与 `JsonArray` 同一模式（显式包装、默认行为不变）。
+
+### 6.3 根因 C：运行时信息不足导致不可逆（无法精确补齐）
+
+| 类型 | 问题 |
+|---|---|
+| MySQL / SQLite UUID 解码 | 存储为 `BINARY(16)` / `TEXT` / `BLOB`，rsqlx 按 storage class 解码为 `bytes`/`str`，**无法判断它原本是不是 UUID** |
+| MySQL `TIMESTAMP` 时区 | MySQL TIMESTAMP 本身不存时区，sqlx 用 UTC 解码后 rsqlx 转 naive 与 pymysql 行为一致；时区信息在服务端已不存在 |
+| SQLite DATETIME 以 INTEGER/REAL 存储 | unixepoch / julianday 是数字，无法与普通整数/浮点区分；rsqlx 只在 declared type 为 DATETIME 且 runtime=TEXT 时尝试解码 |
+| SQLite JSON 解码 | JSON 存为 TEXT，无法区分普通字符串与 JSON 文本；强行解析会误伤 |
+
+**能否补齐**：**不能无损补齐**——信息在存储层已丢失。可行方向：
+- 提供可选的 `row_factory`/连接参数让用户声明"这列是 UUID/JSON"
+- 这是适配层（SQLAlchemy Dialect 的 `TypeDecorator`）的职责，核心不应猜测
+
+这与项目硬约束一致：**核心只做无损、明确的类型映射；语义还原交给适配层**。
+
+### 6.4 根因 D：上游本身也不支持或属 Rust 生态概念（不适用）
+
+| 类型 | 说明 |
+|---|---|
+| MySQL `GEOMETRY` | sqlx 0.9 本身无 Rust 解码器；rsqlx 明确报错已是最佳行为 |
+| Arc / Box / Rc / Cow / Text 适配器 | Rust 所有权/智能指针概念，Python 无对应物 |
+| SQLite 数组 | SQLite 没有数组类型 |
+
+这类差异不构成 rsqlx 缺陷，无需补齐。
+
+### 6.5 补齐优先级建议
+
+| 优先级 | 项目 | 根因 | 补齐方式 | 风险 |
+|---|---|---|---|---|
+| P0 | PG `bigdecimal` 高精度 NUMERIC | A | 启用 feature + 映射 `Decimal` | 低（API 不变，仅扩展精度） |
+| P1 | PG INET / CIDR | A | 启用 `ipnet` + 映射 `ipaddress` | 中（新增依赖） |
+| P1 | MySQL TIME 全范围 | B | 返回 `timedelta` | 中（改变现有 TIME 返回类型，需评估兼容性） |
+| P2 | PG INTERVAL | B | 新增 `rsqlx.Interval` 类型 | 中（新 API） |
+| P2 | PG range | B | 新增 `rsqlx.Range` 类型 | 中（新 API） |
+| P2 | PG MACADDR / BIT / TIMETZ / CITEXT / OID / MONEY | A | 启用 feature + 简单映射 | 低-中 |
+| P3 | SQLite JSON 自动解析 | C | 不补齐，用 `TypeDecorator` | — |
+| — | MySQL/SQLite UUID 还原 | C | 不补齐，用 `TypeDecorator` | — |
+| — | MySQL GEOMETRY / Rust 适配器 | D | 不补齐 | — |
+
+**结论**：rsqlx 与上游的类型差异中，约一半可通过启用 sqlx feature 和新增解码分支补齐
+（根因 A、B），另一半是信息不可逆或产品范围外（根因 C、D），不应在核心层强行补齐。
+`JsonArray` 已经是"新增显式类型对齐上游能力"的成功范式，后续可按同一模式推进。
