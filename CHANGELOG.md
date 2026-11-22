@@ -16,6 +16,7 @@
 - PG / MySQL 实库集成测试全部跑通（0 跳过）：覆盖 CRUD、事务提交/回滚、批量插入、datetime / Decimal / UUID / JSON / bytes 往返、`lastrowid`、异常映射与 `Row` 多方式访问
 - 核心测试支持 `RSQLX_TEST_*_URL` 同时接受原生 DSN 与 SQLAlchemy `+rsqlx` URL 格式，消除两套测试的环境变量冲突
 - CI 新增 `live-db` job，使用 PostgreSQL 18 / MySQL 8 service containers 跑实库集成测试
+- 补充 `Pool.describe()` / `Transaction.describe()` 的三库行为测试（列名、别名、事务内描述），并将 `test_api_friendly.py` 纳入 `tests.yml` 的 Linux 与 Windows/macOS 两个 job
 
 ### 文档与元数据
 

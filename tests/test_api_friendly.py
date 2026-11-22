@@ -202,6 +202,18 @@ def _test_database(url, dbtype):
             )
         ok(f"{dbtype}: DDL (CREATE TABLE)")
 
+        # --- describe(): column names without fetching rows ---
+        cols = await pool.describe("SELECT id, name, age FROM api_test WHERE 1=0")
+        assert cols == ["id", "name", "age"], f"{dbtype}: describe cols = {cols}"
+        cols_expr = await pool.describe("SELECT id AS uid_alias, 1 AS marker FROM api_test")
+        assert "uid_alias" in cols_expr and "marker" in cols_expr, (
+            f"{dbtype}: describe aliases = {cols_expr}"
+        )
+        async with await pool.begin() as _tx:
+            tx_cols = await _tx.describe("SELECT name, price FROM api_test")
+            assert tx_cols == ["name", "price"], f"{dbtype}: tx.describe = {tx_cols}"
+        ok(f"{dbtype}: describe (pool + tx) column names & aliases")
+
         # --- INSERT with all types ---
         now_naive = dt.datetime(2026, 8, 28, 10, 30, 0, 123456)
         now_aware = dt.datetime(2026, 8, 28, 10, 30, 0, 123456, tzinfo=dt.timezone.utc)
