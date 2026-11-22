@@ -206,6 +206,12 @@ await pool.migrate("migrations")
 | `await fetch_raw(sql, row_factory=None)` | 原生查询协议带返回行 |
 | `await describe(sql) -> list[str]` | 返回语句的列名，不拉取数据行 |
 | `await begin() -> Transaction` | 开启事务 |
+| `await begin_with(sql) -> Transaction` | 用显式 BEGIN 语句开启（隔离级别、只读等） |
+| `await copy_in(sql, data: bytes) -> int` | PostgreSQL COPY FROM STDIN（仅 PG） |
+| `await copy_out(sql) -> list[bytes]` | PostgreSQL COPY TO STDOUT（仅 PG） |
+| `await listen() -> NotificationListener` | PostgreSQL LISTEN/NOTIFY 监听器（仅 PG） |
+| `await cursor(sql, batch_size=1000) -> Cursor` | PostgreSQL 服务端游标（仅 PG） |
+| `await ping()` | 检测连接存活（死连接自动剔除重建） |
 | `await migrate(path)` | 执行迁移目录中的 SQL 文件 |
 | `await close()` | 关闭连接池 |
 | `size` / `num_idle` / `is_closed` | 连接池状态 |

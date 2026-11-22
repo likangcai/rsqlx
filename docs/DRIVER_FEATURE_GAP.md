@@ -93,17 +93,25 @@ psycopg2 的差异中，很大一部分是"同步 DBAPI vs 异步驱动"的范�
 
 ## 4. 补齐优先级建议
 
-| 优先级 | 功能 | 理由 |
+| 状态 | 功能 | 实现 |
 |---|---|---|
-| P1 | PG COPY 协议（`execute_copy` / `copy_from_bytes`） | PG 批量导入高频场景，sqlx 有 `CopyIn/CopyOut` 支持 |
-| P1 | 显式事务隔离级别与 `autocommit` | 企业事务需求，sqlx 支持 `IsolationLevel` |
-| P2 | LISTEN/NOTIFY | PG 事件驱动场景，需与 asyncio 集成 |
-| P2 | 服务端游标 / 流式 fetch | 大结果集内存优化 |
-| P2 | `Pool.ping()` 带重连（MySQL） | 长连接可靠性 |
+| ✅ 已完成 | PG COPY 协议 | `pool.copy_in(sql, data)` / `pool.copy_out(sql)`，基于 `PgPoolCopyExt` |
+| ✅ 已完成 | 显式事务隔离级别 | `pool.begin_with("BEGIN ISOLATION LEVEL ...")`（PG）/ MySQL 用 `SET SESSION` + `begin()` |
+| ✅ 已完成 | LISTEN/NOTIFY | `listener = await pool.listen()` → `await listener.listen(ch)` / `await listener.recv()` / `await listener.close()` |
+| ✅ 已完成 | 服务端游标 / 流式 fetch | `cur = await pool.cursor(sql, batch_size)` → `await cur.fetch_batch()` / `await cur.close()` |
+| ✅ 已完成 | `Pool.ping()` |  acquire + `Connection::ping()`；sqlx 默认 acquire 前自动检测死连接并替换（等价重连） |
 | P3 | SQL 标识符组合器 | 动态标识符（表名/列名）场景，参数绑定无法替代 |
 | 不补 | `escape`/`mogrify`/`conv`/`register_type` | 与参数绑定优先、类型映射固定的设计相悖；可用 SQL cast 或适配层解决 |
 
-**结论**：rsqlx 在"驱动核心能力"（连接、查询、事务、类型、池、错误、批量、迁移）
-上已对齐甚至超越 pymysql/psycopg2；差异集中在** DBAPI 生态工具**（转义、诊断、
-SQL 组合）和**协议级高级特性**（COPY、通知、服务端游标）。这些不影响日常使用，
-可按上述优先级逐步补齐，不影响 v0.9.3 发布。
+### 实现说明
+
+- **COPY**：`copy_in` 一次发送全部字节（CSV/text/binary），返回影响行数；`copy_out` 返回 `list[bytes]` 块。仅 PG 支持，其他库抛 `NotImplementedError`
+- **隔离级别**：`begin_with` 的 statement 是**替代整个 BEGIN 语句**（非追加），需传完整 SQL。MySQL 8.0.16 不支持 `START TRANSACTION ISOLATION LEVEL` 单语句，用 `SET SESSION TRANSACTION ISOLATION LEVEL X` + 普通 `begin()`
+- **LISTEN/NOTIFY**：`recv()` 返回 `(channel, payload, process_id)` tuple；监听器持有专用连接，用完必须 `await close()`
+- **服务端游标**：内部先 `BEGIN` 再 `DECLARE CURSOR`（PG 要求），分批 `FETCH`，`await close()` 时 `CLOSE` + `COMMIT` 释放连接；用完必须关闭
+- **ping**：sqlx pool 默认 `test_before_acquire(true)`，死连接自动剔除重建，因此 ping 无需显式重连逻辑
+
+**结论**：rsqlx 在"驱动核心能力"（连接、查询、事务、类型、池、错误、批量、迁移、
+COPY、通知、游标、隔离级别、ping）上已对齐甚至超越 pymysql/psycopg2。剩余差异集中
+在 DBAPI 生态工具（转义、诊断、SQL 组合、自定义类型适配器），这些与 rsqlx 的参数绑定
+优先、固定类型映射设计相悖，应由 SQLAlchemy `TypeDecorator` 等适配层解决。

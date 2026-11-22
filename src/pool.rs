@@ -194,6 +194,132 @@ impl Pool {
         Ok(Transaction { inner })
     }
 
+    /// Start a transaction with an explicit BEGIN statement.
+    ///
+    /// Use for isolation levels or read-only/deferrable transactions.
+    /// The statement is passed verbatim to the database (no SQL rewriting),
+    /// e.g. "ISOLATION LEVEL SERIALIZABLE READ ONLY".
+    #[pyo3(signature = (statement,))]
+    async fn begin_with(&self, statement: String) -> PyResult<Transaction> {
+        let inner = match &self.inner {
+            Backend::Pg(p) => {
+                let pool = p.clone();
+                let tx = crate::runtime::run_db_task(async move {
+                    let stmt = sqlx::AssertSqlSafe(statement.as_str());
+                    sqlx::PgPool::begin_with(&pool, stmt).await
+                })
+                .await?;
+                backend::TxB::Pg(Arc::new(tokio::sync::Mutex::new(Some(tx))))
+            }
+            Backend::MySql(p) => {
+                let pool = p.clone();
+                let tx = crate::runtime::run_db_task(async move {
+                    let stmt = sqlx::AssertSqlSafe(statement.as_str());
+                    sqlx::MySqlPool::begin_with(&pool, stmt).await
+                })
+                .await?;
+                backend::TxB::MySql(Arc::new(tokio::sync::Mutex::new(Some(tx))))
+            }
+            Backend::Sqlite(p) => {
+                let pool = p.clone();
+                let tx = crate::runtime::run_db_task(async move {
+                    let stmt = sqlx::AssertSqlSafe(statement.as_str());
+                    sqlx::SqlitePool::begin_with(&pool, stmt).await
+                })
+                .await?;
+                backend::TxB::Sqlite(Arc::new(tokio::sync::Mutex::new(Some(tx))))
+            }
+        };
+        Ok(Transaction { inner })
+    }
+
+    /// Create a PostgreSQL server-side cursor for streaming a large result set.
+    #[pyo3(signature = (sql, batch_size = 1000))]
+    async fn cursor(&self, sql: String, batch_size: u32) -> PyResult<crate::cursor::Cursor> {
+        match &self.inner {
+            Backend::Pg(p) => {
+                let name = crate::cursor::Cursor::next_name();
+                let conn = backend::pg_cursor_declare(p.clone(), sql, name.clone()).await?;
+                Ok(crate::cursor::Cursor::new(conn, name, batch_size.max(1)))
+            }
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "server-side cursors are only supported by PostgreSQL",
+            )),
+        }
+    }
+
+    /// Test the pool by acquiring a connection and pinging the server.
+    /// sqlx pools already test connections before acquire by default, so
+    /// stale connections are transparently replaced.
+    async fn ping(&self) -> PyResult<()> {
+        match &self.inner {
+            Backend::Pg(p) => {
+                let pool = p.clone();
+                crate::runtime::run_db_task(async move {
+                    let mut conn = pool.acquire().await?;
+                    sqlx::Connection::ping(&mut *conn).await
+                })
+                .await
+            }
+            Backend::MySql(p) => {
+                let pool = p.clone();
+                crate::runtime::run_db_task(async move {
+                    let mut conn = pool.acquire().await?;
+                    sqlx::Connection::ping(&mut *conn).await
+                })
+                .await
+            }
+            Backend::Sqlite(p) => {
+                let pool = p.clone();
+                crate::runtime::run_db_task(async move {
+                    let mut conn = pool.acquire().await?;
+                    sqlx::Connection::ping(&mut *conn).await
+                })
+                .await
+            }
+        }
+    }
+
+    /// Create a PostgreSQL LISTEN/NOTIFY listener on a dedicated connection.
+    async fn listen(&self) -> PyResult<crate::listener::NotificationListener> {
+        match &self.inner {
+            Backend::Pg(p) => {
+                let pool = p.clone();
+                let listener = crate::runtime::run_db_task(async move {
+                    sqlx::postgres::PgListener::connect_with(&pool).await
+                })
+                .await?;
+                Ok(crate::listener::NotificationListener::new(listener))
+            }
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "LISTEN/NOTIFY is only supported by PostgreSQL",
+            )),
+        }
+    }
+
+    /// PostgreSQL COPY FROM STDIN. `data` is the raw copy stream (CSV/text/binary).
+    /// Returns the number of rows copied. Only available for PostgreSQL.
+    #[pyo3(signature = (sql, data))]
+    async fn copy_in(&self, sql: String, data: Vec<u8>) -> PyResult<u64> {
+        match &self.inner {
+            Backend::Pg(p) => backend::pg_copy_in(p.clone(), sql, data).await,
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "COPY is only supported by PostgreSQL",
+            )),
+        }
+    }
+
+    /// PostgreSQL COPY TO STDOUT. Returns the raw copy stream as a list of byte chunks.
+    #[pyo3(signature = (sql,))]
+    async fn copy_out(&self, sql: String) -> PyResult<Vec<Vec<u8>>> {
+        match &self.inner {
+            Backend::Pg(p) => backend::pg_copy_out(p.clone(), sql).await,
+            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "COPY is only supported by PostgreSQL",
+            )),
+        }
+    }
+
     /// Execute a raw SQL string without parameter binding.
     ///
     /// Uses the "simple query" protocol (COM_QUERY) instead of prepared

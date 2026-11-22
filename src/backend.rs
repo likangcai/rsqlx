@@ -14,7 +14,7 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use rust_decimal::Decimal;
 use serde_json::Value;
 use sqlx::mysql::{MySql, MySqlPool};
-use sqlx::postgres::{PgPool, PgRow, Postgres};
+use sqlx::postgres::{PgPool, PgPoolCopyExt, PgRow, Postgres};
 use sqlx::query::Query;
 use sqlx::sqlite::{Sqlite, SqlitePool, SqliteRow};
 use sqlx::{Column, Database, Executor, Pool, Row, Statement, Transaction, TypeInfo, ValueRef as _};
@@ -1099,6 +1099,73 @@ fn rewrite_placeholders<DB: Database>(sql: &str, _params: &[Vec<PyParam>]) -> St
         }
     }
     out
+}
+
+/// Server-side cursor: declare a cursor on a dedicated connection and return
+/// that connection together with the cursor name for batched FETCH calls.
+pub async fn pg_cursor_declare(
+    pool: PgPool,
+    sql: String,
+    name: String,
+) -> PyResult<sqlx::pool::PoolConnection<Postgres>> {
+    crate::runtime::run_db_task(async move {
+        let mut conn = pool.acquire().await?;
+        // PostgreSQL requires DECLARE CURSOR inside a transaction block.
+        sqlx::query(sqlx::AssertSqlSafe("BEGIN"))
+            .execute(&mut *conn)
+            .await?;
+        // `name` is generated internally (rsqlx_cursor_N), so no user input.
+        let declare = format!("DECLARE {} CURSOR FOR {}", name, sql);
+        sqlx::query(sqlx::AssertSqlSafe(declare.as_str()))
+            .execute(&mut *conn)
+            .await?;
+        Ok::<_, sqlx::Error>(conn)
+    })
+    .await
+}
+
+/// Fetch the next batch from a server-side cursor. Returns rows as a Python
+/// list of dicts using the same decoding path as normal queries.
+pub async fn pg_cursor_fetch(
+    conn: Arc<tokio::sync::Mutex<Option<sqlx::pool::PoolConnection<Postgres>>>>,
+    name: String,
+    batch: u32,
+) -> PyResult<Vec<PgRow>> {
+    crate::runtime::run_db_task(async move {
+        let mut guard = conn.lock().await;
+        let conn = guard
+            .as_mut()
+            .ok_or_else(|| sqlx::Error::Protocol("cursor is closed".into()))?;
+        let sql = format!("FETCH {} FROM {}", batch, name);
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+            .fetch_all(&mut **conn)
+            .await
+    })
+    .await
+}
+
+/// PostgreSQL COPY FROM STDIN: send all bytes in one shot, finish the copy.
+pub async fn pg_copy_in(pool: PgPool, sql: String, data: Vec<u8>) -> PyResult<u64> {
+    crate::runtime::run_db_task(async move {
+        let mut copy = pool.copy_in_raw(sql.as_str()).await?;
+        copy.send(data.as_slice()).await?;
+        copy.finish().await
+    })
+    .await
+}
+
+/// PostgreSQL COPY TO STDOUT: collect all byte chunks into a Python list.
+pub async fn pg_copy_out(pool: PgPool, sql: String) -> PyResult<Vec<Vec<u8>>> {
+    crate::runtime::run_db_task(async move {
+        use futures::TryStreamExt;
+        let mut stream = pool.copy_out_raw(sql.as_str()).await?;
+        let mut out = Vec::new();
+        while let Some(chunk) = stream.try_next().await? {
+            out.push(chunk.to_vec());
+        }
+        Ok::<Vec<Vec<u8>>, sqlx::Error>(out)
+    })
+    .await
 }
 
 pub async fn pool_close<DB: Database>(pool: Pool<DB>) -> PyResult<()> {

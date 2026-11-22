@@ -212,6 +212,12 @@ Timeout arguments are in seconds (`float`).
 | `await fetch_raw(sql, row_factory=None)` | Raw query protocol with row results |
 | `await describe(sql) -> list[str]` | Column names of a statement, without fetching rows |
 | `await begin() -> Transaction` | Start a transaction |
+| `await begin_with(sql) -> Transaction` | Start with explicit BEGIN statement (isolation level, read-only) |
+| `await copy_in(sql, data: bytes) -> int` | PostgreSQL COPY FROM STDIN (PG only) |
+| `await copy_out(sql) -> list[bytes]` | PostgreSQL COPY TO STDOUT (PG only) |
+| `await listen() -> NotificationListener` | PostgreSQL LISTEN/NOTIFY listener (PG only) |
+| `await cursor(sql, batch_size=1000) -> Cursor` | PostgreSQL server-side cursor (PG only) |
+| `await ping()` | Test connection liveness (stale connections auto-replaced) |
 | `await migrate(path)` | Run SQL migration files from a directory |
 | `await close()` | Close the pool |
 | `size` / `num_idle` / `is_closed` | Pool introspection |

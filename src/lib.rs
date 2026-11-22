@@ -5,7 +5,9 @@
 //! powered by Rust's [sqlx](https://github.com/launchbadge/sqlx) crate.
 
 mod backend;
+mod cursor;
 mod error;
+mod listener;
 mod params;
 mod pool;
 mod runtime;
@@ -75,6 +77,8 @@ fn rsqlx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pool::ExecuteResult>()?;
     m.add_class::<transaction::Transaction>()?;
     m.add_class::<params::JsonArray>()?;
+    m.add_class::<listener::NotificationListener>()?;
+    m.add_class::<cursor::Cursor>()?;
 
     m.add_function(wrap_pyfunction!(pool::connect, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
