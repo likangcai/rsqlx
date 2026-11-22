@@ -26,6 +26,7 @@
 - **修复 MySQL `GEOMETRY` 列的误导性解码错误**：sqlx 无对应 Rust 解码器，现明确抛出 `unsupported MySQL type 'GEOMETRY'` 的 `InterfaceError`（列为已知限制，见 README）
 - 记录 MySQL 参数个数不匹配会导致池连接占用、`close()` 可能挂起的已知限制（PG/SQLite 不受影响）
 - 新增 `docs/TYPE_SUPPORT_MATRIX.md`：三库类型支持与上游 sqlx 0.9.0 的完整对照表（含 `JsonArray` 用法示例）、差异根因（feature 未启用 / Python 类型系统边界 / 运行时信息不可逆 / 不适用）与补齐优先级建议，并在 README 文档索引中链接
+- 新增 `docs/DRIVER_FEATURE_GAP.md`：与 pymysql / psycopg2 的功能差异对照（范式差异 / 真实缺失 / rsqlx 独有优势）与补齐优先级，并在 README 文档索引中链接
 
 ### 文档与元数据
 

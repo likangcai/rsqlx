@@ -442,6 +442,7 @@ git push origin v0.2.0
 | [README_CN.md](README_CN.md) | 中文说明 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Implementation internals, solved problems, packaging with maturin, PyPI publishing, installation |
 | [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md) | rsqlx vs upstream sqlx type support by database |
+| [DRIVER_FEATURE_GAP.md](docs/DRIVER_FEATURE_GAP.md) | Feature comparison vs pymysql / psycopg2 |
 | [SQLALCHEMY_DIALECT_DESIGN.md](docs/SQLALCHEMY_DIALECT_DESIGN.md) | SQLAlchemy 2.0 async dialect design |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 

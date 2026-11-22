@@ -473,6 +473,7 @@ git push origin v0.2.0
 | [README.md](README.md) | English version |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 实现原理、踩坑记录、maturin 打包、PyPI 发布流程、用户安装 |
 | [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md) | rsqlx 与上游 sqlx 的三库类型支持对照 |
+| [DRIVER_FEATURE_GAP.md](docs/DRIVER_FEATURE_GAP.md) | 与 pymysql / psycopg2 的功能差异对照 |
 | [SQLALCHEMY_DIALECT_DESIGN.md](docs/SQLALCHEMY_DIALECT_DESIGN.md) | SQLAlchemy 2.0 异步方言设计 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 
