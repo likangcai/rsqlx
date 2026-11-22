@@ -259,6 +259,7 @@ rsqlx.Error
 - sqlx 的编译期 `query!` 宏是 Rust 编译期特性，Python 侧只提供运行时查询
 - 取消协程（如 `asyncio.timeout`）会取消 await，但已发到数据库的查询会在后台跑完
 - MySQL 连接如果服务端默认用 DHE cipher（如 MySQL 8.0.16），rustls 不支持 DHE，需要在 URL 里加 `?ssl-mode=disabled`
+- **不支持 SQLCipher**：rsqlx 静态链接的是标准 SQLite（非 SQLCipher），因此无法打开加密的 SQLite 数据库。上游 sqlx 虽有 `bundled-sqlcipher` feature，但启用它会替换内置 SQLite 引擎并要求编译 vendored OpenSSL，与 rsqlx 零系统依赖的承诺和跨平台 CI 冲突。如需 SQLCipher，请使用外部加密数据库或专用的 SQLCipher 客户端
 
 ## 从 pymysql 迁移
 

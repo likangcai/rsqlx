@@ -96,6 +96,8 @@ unsupported.
   and surface as `NotSupportedError`-equivalent DBAPI errors.
 - Django integration is not included. A future adapter package can build on the
   same DBAPI-shaped boundary to target `django-async-backend` or `dj11.aorm`.
+- SQLCipher-encrypted SQLite databases are not supported (the core links
+  standard SQLite, not SQLCipher).
 
 ## Differences from `asyncpg` / `aiomysql`
 
