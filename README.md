@@ -278,6 +278,26 @@ Notes:
 This mirrors upstream sqlx's `Vec<Json<T>>` binding (`PgHasArrayType for
 Json<T>`) while keeping rsqlx's existing `list[dict]` behaviour intact.
 
+### PostgreSQL ranges with `rsqlx.Range`
+
+```python
+import rsqlx
+
+r = rsqlx.Range(1, 10, include_start=True, include_end=False)   # [1, 10)
+await pool.execute("CREATE TEMP TABLE _r (r INT4RANGE)")
+await pool.execute("INSERT INTO _r VALUES ($1)", [r])
+row = await pool.fetch_one("SELECT r FROM _r")
+# row["r"] is an rsqlx.Range with .start / .end / .include_start / .include_end
+```
+
+- `start=None` / `end=None` mean unbounded. Supported element types: `int`,
+  `Decimal`, `date`, `datetime` (PG `INT4RANGE`/`INT8RANGE`/`NUMRANGE`/`DATERANGE`/
+  `TSRANGE`/`TSTZRANGE`).
+- Range columns are decoded to `rsqlx.Range` automatically.
+- PostgreSQL normalises discrete ranges (e.g. `[10,20]` → `[10,21)`); rsqlx
+  returns the normalised value.
+- MySQL / SQLite have no native range type; a `Range` passed there binds as NULL.
+
 ### Row Type Mapping
 
 | Database type | Python type |
@@ -299,6 +319,7 @@ Json<T>`) while keeping rsqlx's existing `list[dict]` behaviour intact.
 | PG INET / CIDR / MACADDR / BIT / VARBIT / TIMETZ | `str` |
 | PG INTERVAL | `dict{months, days, microseconds}` |
 | PG MONEY | `decimal.Decimal` |
+| PG range (INT4/8RANGE, NUMRANGE, DATE/TS/TSTZRANGE) | `rsqlx.Range` |
 | PG arrays of the above | `list` (None elements preserved) |
 
 Unsupported types (e.g. PG ranges, geometric types, custom domain/composite types,

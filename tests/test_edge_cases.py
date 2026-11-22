@@ -184,11 +184,63 @@ def test_pg_optional_feature_types():
 
 
 @needs_pg
+def test_pg_range_binding_and_decoding():
+    """rsqlx.Range binds as PgRange<T> and range columns decode back to Range."""
+    async def main():
+        p = await rsqlx.connect(PG_DSN, max_connections=2)
+
+        # Constructor / repr
+        r = rsqlx.Range(1, 10, include_start=True, include_end=False)
+        assert repr(r) == "[1, 10)"
+        assert r.start == 1 and r.end == 10
+        assert r.include_start is True and r.include_end is False
+
+        # Bind + round-trip
+        await p.execute("DROP TABLE IF EXISTS edge_pg_range")
+        await p.execute("CREATE TABLE edge_pg_range (id INT, r INT4RANGE, n NUMRANGE)")
+        await p.execute(
+            "INSERT INTO edge_pg_range VALUES ($1, $2, $3)",
+            [1, r, rsqlx.Range(decimal.Decimal("1.5"), decimal.Decimal("9.9"))],
+        )
+        row = await p.fetch_one("SELECT r, n FROM edge_pg_range WHERE id=1")
+        ir = row["r"]
+        assert isinstance(ir, rsqlx.Range)
+        assert ir.start == 1 and ir.end == 10
+        assert ir.include_start is True and ir.include_end is False
+        nr = row["n"]
+        assert isinstance(nr, rsqlx.Range)
+        assert nr.start == decimal.Decimal("1.5") and nr.end == decimal.Decimal("9.9")
+
+        # Unbounded
+        await p.execute(
+            "INSERT INTO edge_pg_range (id, r) VALUES ($1, $2)",
+            [2, rsqlx.Range(None, 100, include_end=True)],
+        )
+        ur = (await p.fetch_one("SELECT r FROM edge_pg_range WHERE id=2"))["r"]
+        assert ur.start is None
+        assert ur.end is not None  # discrete normalization may shift closed end
+
+        # Decode other range element types
+        for expr, expected_start, expected_end in [
+            ("int8range(10, 20)", 10, 20),
+            ("daterange('2026-01-01','2026-12-31')", dt.date(2026, 1, 1), dt.date(2026, 12, 31)),
+            ("tsrange('2026-01-01 00:00:00','2026-01-02 00:00:00')",
+             dt.datetime(2026, 1, 1, 0, 0), dt.datetime(2026, 1, 2, 0, 0)),
+        ]:
+            v = (await p.fetch_one(f"SELECT {expr} AS v"))["v"]
+            assert isinstance(v, rsqlx.Range)
+            assert v.start == expected_start and v.end == expected_end
+
+        await p.close()
+
+    run(main())
+
+
+@needs_pg
 def test_pg_unsupported_types_error():
     async def main():
         p = await rsqlx.connect(PG_DSN, max_connections=2)
         cases = [
-            ("SELECT int4range(1, 5) AS v", "INT4RANGE"),
             ("SELECT point(1, 2) AS v", "POINT"),
         ]
         for sql, label in cases:

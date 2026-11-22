@@ -195,6 +195,32 @@ pub fn json_to_py<'py>(py: Python<'py>, v: &Value) -> PyResult<Bound<'py, PyAny>
     })
 }
 
+/// Build a Python `rsqlx.Range` from a Rust PgRange, converting the two
+/// `std::ops::Bound<T>` values into Python start/end + inclusion flags.
+fn pg_range_to_py<'py, T>(
+    py: Python<'py>,
+    range: sqlx::postgres::types::PgRange<T>,
+    to_py: impl Fn(Python<'py>, &T) -> PyResult<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    use std::ops::Bound as OpBound;
+    let cls = py.import("rsqlx")?.getattr("Range")?;
+    let none = py_none(py);
+    let (start_py, inc_s) = match &range.start {
+        OpBound::Included(v) => (to_py(py, v)?, true),
+        OpBound::Excluded(v) => (to_py(py, v)?, false),
+        OpBound::Unbounded => (none.clone(), true),
+    };
+    let (end_py, inc_e) = match &range.end {
+        OpBound::Included(v) => (to_py(py, v)?, true),
+        OpBound::Excluded(v) => (to_py(py, v)?, false),
+        OpBound::Unbounded => (none, true),
+    };
+    let kwargs = pyo3::types::PyDict::new(py);
+    kwargs.set_item("include_start", inc_s)?;
+    kwargs.set_item("include_end", inc_e)?;
+    cls.call((start_py, end_py), Some(&kwargs))
+}
+
 fn unsupported_type(db: &str, type_name: &str, col: &str) -> PyErr {
     crate::InterfaceError::new_err(format!(
         "unsupported {db} type '{type_name}' for column '{col}'; \
@@ -285,6 +311,32 @@ fn pg_value_to_py<'py>(
         },
         "TIMETZ" => match opt!(row, i, sqlx::postgres::types::PgTimeTz<NaiveTime, FixedOffset>) {
             Some(v) => Ok(pyv!(py, format!("{}{}", v.time, v.offset))),
+            None => Ok(py_none(py)),
+        },
+
+        // PostgreSQL ranges -> Python rsqlx.Range
+        "INT4RANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<i32>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| Ok(pyv!(py, *x))),
+            None => Ok(py_none(py)),
+        },
+        "INT8RANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<i64>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| Ok(pyv!(py, *x))),
+            None => Ok(py_none(py)),
+        },
+        "NUMRANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<Decimal>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| decimal_to_py(py, x)),
+            None => Ok(py_none(py)),
+        },
+        "DATERANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<NaiveDate>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| Ok(pyv!(py, *x))),
+            None => Ok(py_none(py)),
+        },
+        "TSRANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<NaiveDateTime>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| Ok(pyv!(py, *x))),
+            None => Ok(py_none(py)),
+        },
+        "TSTZRANGE" => match opt!(row, i, sqlx::postgres::types::PgRange<DateTime<FixedOffset>>) {
+            Some(v) => pg_range_to_py(py, v, |py, x| Ok(pyv!(py, *x))),
             None => Ok(py_none(py)),
         },
 
@@ -506,6 +558,9 @@ impl DbExt for Postgres {
                 q.bind(values)
             }
             PyParam::Array(items) => pg_bind_array(q, items),
+            PyParam::Range { start, end, include_start, include_end } => {
+                pg_bind_range(q, start, end, *include_start, *include_end)
+            }
         }
     }
 
@@ -554,6 +609,7 @@ impl DbExt for Postgres {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));
             }
+            PyParam::Range { .. } => { sep.push_bind(Option::<sqlx::postgres::types::PgRange<i32>>::None); }
         }
     }
 
@@ -624,6 +680,81 @@ where
     q.bind(v)
 }
 
+/// Bind a `rsqlx.Range` as a PostgreSQL `PgRange<T>`, inferring `T` from the
+/// first non-null bound.  `None` bounds map to `Bound::Unbounded`.
+fn pg_bind_range<'q>(
+    q: Query<'q, Postgres, <Postgres as Database>::Arguments>,
+    start: &Option<Box<PyParam>>,
+    end: &Option<Box<PyParam>>,
+    include_start: bool,
+    include_end: bool,
+) -> Query<'q, Postgres, <Postgres as Database>::Arguments> {
+    use std::ops::Bound as OpBound;
+    use sqlx::postgres::types::PgRange;
+
+    // Infer element type from the first non-unbounded bound.
+    let sample: Option<&PyParam> = start
+        .as_deref()
+        .or_else(|| end.as_deref());
+
+    // Helper closure-free conversion: build Bound<T> for a given T extractor.
+    macro_rules! bind_t {
+        ($t:ty, $extract:expr) => {{
+            let to_bound = |p: &Option<Box<PyParam>>, inclusive: bool| -> OpBound<$t> {
+                match p.as_deref() {
+                    None => OpBound::Unbounded,
+                    Some(v) => {
+                        let val: Option<$t> = ($extract)(v);
+                        match val {
+                            Some(x) if inclusive => OpBound::Included(x),
+                            Some(x) => OpBound::Excluded(x),
+                            None => OpBound::Unbounded,
+                        }
+                    }
+                }
+            };
+            let range: PgRange<$t> = PgRange {
+                start: to_bound(start, include_start),
+                end: to_bound(end, include_end),
+            };
+            q.bind(range)
+        }};
+    }
+
+    match sample {
+        None => q.bind(PgRange::<i32> {
+            start: OpBound::Unbounded,
+            end: OpBound::Unbounded,
+        }),
+        Some(PyParam::Int(_)) => bind_t!(i32, |v: &PyParam| match v {
+            PyParam::Int(n) => Some(*n as i32),
+            _ => None,
+        }),
+        Some(PyParam::Decimal(_)) => bind_t!(Decimal, |v: &PyParam| match v {
+            PyParam::Decimal(d) => Some(*d),
+            _ => None,
+        }),
+        Some(PyParam::Date(_)) => bind_t!(NaiveDate, |v: &PyParam| match v {
+            PyParam::Date(d) => Some(*d),
+            _ => None,
+        }),
+        Some(PyParam::DateTime(_)) => bind_t!(NaiveDateTime, |v: &PyParam| match v {
+            PyParam::DateTime(d) => Some(*d),
+            _ => None,
+        }),
+        Some(PyParam::DateTimeTz(_)) => bind_t!(DateTime<FixedOffset>, |v: &PyParam| match v {
+            PyParam::DateTimeTz(d) => Some(*d),
+            _ => None,
+        }),
+        // Unsupported element types fall back to int4range with unbounded
+        // bounds rather than panicking; callers should pass supported scalars.
+        Some(_) => q.bind(PgRange::<i32> {
+            start: OpBound::Unbounded,
+            end: OpBound::Unbounded,
+        }),
+    }
+}
+
 fn param_to_json_value(p: &PyParam) -> serde_json::Value {
     match p {
         PyParam::Null => serde_json::Value::Null,
@@ -643,6 +774,14 @@ fn param_to_json_value(p: &PyParam) -> serde_json::Value {
         PyParam::Json(v) => v.clone(),
         PyParam::JsonArray(items) => serde_json::Value::Array(items.clone()),
         PyParam::Array(items) => serde_json::Value::Array(items.iter().map(param_to_json_value).collect()),
+        PyParam::Range { start, end, include_start, include_end } => {
+            let mut m = serde_json::Map::new();
+            m.insert("start".into(), start.as_deref().map(param_to_json_value).unwrap_or(serde_json::Value::Null));
+            m.insert("end".into(), end.as_deref().map(param_to_json_value).unwrap_or(serde_json::Value::Null));
+            m.insert("include_start".into(), serde_json::Value::Bool(*include_start));
+            m.insert("include_end".into(), serde_json::Value::Bool(*include_end));
+            serde_json::Value::Object(m)
+        }
     }
 }
 
@@ -696,6 +835,7 @@ impl DbExt for MySql {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 q.bind(sqlx::types::Json(json))
             }
+            PyParam::Range { .. } => q.bind(Option::<i32>::None), // ranges are PostgreSQL-only
         }
     }
 
@@ -748,6 +888,7 @@ impl DbExt for MySql {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));
             }
+            PyParam::Range { .. } => { sep.push_bind(Option::<i32>::None); }
         }
     }
 
@@ -784,6 +925,7 @@ impl DbExt for Sqlite {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 q.bind(sqlx::types::Json(json))
             }
+            PyParam::Range { .. } => q.bind(Option::<i32>::None), // ranges are PostgreSQL-only
         }
     }
 
@@ -832,6 +974,7 @@ impl DbExt for Sqlite {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));
             }
+            PyParam::Range { .. } => { sep.push_bind(Option::<i32>::None); }
         }
     }
 

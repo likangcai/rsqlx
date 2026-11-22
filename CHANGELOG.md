@@ -6,6 +6,7 @@
 
 ### 新增
 
+- `rsqlx.Range(start, end, include_start=True, include_end=False)`：显式 PostgreSQL 区间类型，绑定为 `PgRange<T>`（按元素推断 INT4RANGE/INT8RANGE/NUMRANGE/DATERANGE/TSRANGE/TSTZRANGE），range 列自动解码回 `rsqlx.Range`（含边界标记与无界信息）；MySQL/SQLite 无原生区间类型
 - **补齐协议级高级功能**：`begin_with()` 显式事务隔离级别；PG `copy_in()`/`copy_out()` COPY 协议；PG `listen()` LISTEN/NOTIFY 监听器（`recv()` 返回 `(channel, payload, process_id)`）；PG `cursor()` 服务端游标（分批 `fetch_batch()`）；`ping()` 连接存活检测（sqlx 默认自动替换死连接）
 - **启用 sqlx 可选类型 feature 并补齐 PG 类型**：`bigdecimal` / `ipnet` / `mac_address` / `bit-vec` / `time`。新增解码：OID→`int`、CITEXT→`str`、INET/CIDR→`str`、MACADDR→`str`、BIT/VARBIT→位串 `str`、TIMETZ→带时区 `str`、INTERVAL→`dict{months,days,microseconds}`（无损）、MONEY→`Decimal`。全部为纯 Rust 依赖，不引入系统依赖
 - NUMERIC 解码改为 rust_decimal 优先、超范围回退 BigDecimal → Python `Decimal`，支持任意精度（原仅 ~96 位）

@@ -40,7 +40,7 @@ Python 动态类型与 Rust 静态类型的映射边界，而非 sqlx 能力缺�
 | BIT / VARBIT | bit_vec | → `str`（位串 `'1010'`） | ✅ |
 | 几何（POINT / LINE / LSEG / BOX / PATH / POLYGON / CIRCLE 等） | PgCube 等 | 明确报错 | ❌ |
 | HSTORE / LTREE / LQUERY | PgHstore / PgLTree / PgLQuery | 明确报错 | ❌ |
-| range（INT4/8RANGE、TSRANGE、TSTZRANGE、DATERANGE、NUMRANGE） | Range<T> | 明确报错 | ❌ |
+| range（INT4/8RANGE、TSRANGE、TSTZRANGE、DATERANGE、NUMRANGE） | PgRange<T> | 解码 → `rsqlx.Range`；绑定用 `rsqlx.Range(start, end, include_start, include_end)` | ✅ |
 | domain / composite / enum / 匿名 record | `#[derive(Type)]` | 自定义 type_name 落入 default，明确报错 | ❌ |
 | 元素数组（BOOL[]/INTn[]/FLOATn[]/TEXT[]/BYTEA[]/DATE[]/TIME[]/TIMESTAMP[]/TIMESTAMPTZ[]/NUMERIC[]/UUID[]/JSON[]/JSONB[]） | 原生数组 | 全部支持解码；标量列表可绑定为原生数组 | ✅ |
 | 其它元素数组（OID[]/CITEXT[]/INET[]/MACADDR[]/BIT[]/INTERVAL[]/MONEY[]/range[]/几何[]/ltree[]/domain[]） | 原生数组 | 明确报错 | ❌ |
@@ -120,6 +120,28 @@ rows = await pool.fetch("SELECT items FROM docs")
 - 读取 `JSONB[]` / `JSON[]` 列无需包装器，rsqlx 自动解码为 `list`（保留 `None`）
 - 上游依据：`sqlx-postgres/src/types/json.rs` 中 `impl<T> PgHasArrayType for Json<T>`
 
+### 4.1 `rsqlx.Range` — PostgreSQL 区间类型
+
+```python
+import rsqlx
+
+r = rsqlx.Range(1, 10, include_start=True, include_end=False)   # [1, 10)
+await pool.execute("INSERT INTO t (r) VALUES ($1)", [r])
+
+row = await pool.fetch_one("SELECT r FROM t")
+assert row["r"].start == 1 and row["r"].end == 10
+assert row["r"].include_start is True and row["r"].include_end is False
+```
+
+- `start=None` / `end=None` 表示无界（unbounded），如 `rsqlx.Range(None, 100, include_end=True)`
+- 支持的元素类型：`int`（INT4RANGE/INT8RANGE）、`Decimal`（NUMRANGE）、`date`（DATERANGE）、
+  `datetime`（TSRANGE）、aware `datetime`（TSTZRANGE）——绑定时按元素值推断区间类型
+- 读取任意上述 range 列会自动解码为 `rsqlx.Range`（含边界标记与无界信息）
+- **离散区间规范化**：PostgreSQL 会把整数/日期区间的闭端点规范化（如 `[10,20]` → `[10,21)`），
+  这是 PG 标准行为，`rsqlx` 如实返回规范化后的值
+- MySQL / SQLite 无原生区间类型；传入 `rsqlx.Range` 会绑定为 NULL（不应在这些库使用）
+- 上游依据：`sqlx-postgres/src/types/range.rs` 的 `PgRange<T>` + `std::ops::Bound<T>`
+
 ## 5. 通用约束
 
 - 不支持的列类型统一抛 `rsqlx.InterfaceError`，消息形如
@@ -156,7 +178,7 @@ OID / CITEXT / INTERVAL / MONEY 使用 sqlx 内置类型，无需额外 feature�
 | 类型 | sqlx 表示 | Python 困境 |
 |---|---|---|
 | PG `INTERVAL` | `PgInterval { months: i32, days: i32, microseconds: i64 }` | `datetime.timedelta` **无"月"字段**（月长不固定，无法无损转换） |
-| PG range（6 种） | `Range<T>` + `Bound<T>`（含/不含边界、无界） | Python 无内置 range 对象能表达开闭区间和无界 |
+| PG range（6 种） | `PgRange<T>` + `Bound<T>` | **已解决**：新增 `rsqlx.Range(start, end, include_start, include_end)` 显式类型表达开闭区间与无界 |
 | PG composite / domain / enum / record | `#[derive(Type)]` 的 Rust 结构体 | Python 侧没有列类型元数据，无法自动构造对应对象 |
 | MySQL `TIME` 全范围 | `MySqlTime`（负数、±838:59:59、微秒） | `datetime.time` 只表示 time-of-day（0–23:59:59） |
 | 单字节 `"CHAR"` | `i8` | 返回 `str` 是 Python 直觉选择 |
@@ -202,7 +224,7 @@ OID / CITEXT / INTERVAL / MONEY 使用 sqlx 内置类型，无需额外 feature�
 | ✅ 已完成 | PG INET / CIDR | A | 启用 `ipnet` + 映射 `str` | 中（新增依赖） |
 | ✅ 已完成 | PG MACADDR / BIT / TIMETZ / CITEXT / OID / MONEY / INTERVAL | A | 启用 feature + 简单映射 | 低-中 |
 | P1 | MySQL TIME 全范围 | B | 返回 `timedelta` | 中（改变现有 TIME 返回类型，需评估兼容性） |
-| P2 | PG range | B | 新增 `rsqlx.Range` 类型 | 中（新 API） |
+| ✅ 已完成 | PG range | B | 新增 `rsqlx.Range` 类型，支持绑定与 6 种 range 解码 | 中（新 API） |
 | P2 | PG 几何 / HSTORE / LTREE / domain / composite | A/B | 需启用更多 feature + 设计 Python 表示 | 高（收益低，需求少见） |
 | P3 | SQLite JSON 自动解析 | C | 不补齐，用 `TypeDecorator` | — |
 | — | MySQL/SQLite UUID 还原 | C | 不补齐，用 `TypeDecorator` | — |

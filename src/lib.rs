@@ -77,6 +77,7 @@ fn rsqlx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pool::ExecuteResult>()?;
     m.add_class::<transaction::Transaction>()?;
     m.add_class::<params::JsonArray>()?;
+    m.add_class::<params::Range>()?;
     m.add_class::<listener::NotificationListener>()?;
     m.add_class::<cursor::Cursor>()?;
 

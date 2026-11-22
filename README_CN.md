@@ -264,6 +264,23 @@ rows = await pool.fetch("SELECT items FROM docs")
 
 这与上游 sqlx 的 `Vec<Json<T>>` 绑定能力对齐（`PgHasArrayType for Json<T>`），同时不改变现有 `list[dict]` 的行为。
 
+### PostgreSQL 区间类型 `rsqlx.Range`
+
+```python
+import rsqlx
+
+r = rsqlx.Range(1, 10, include_start=True, include_end=False)   # [1, 10)
+await pool.execute("CREATE TEMP TABLE _r (r INT4RANGE)")
+await pool.execute("INSERT INTO _r VALUES ($1)", [r])
+row = await pool.fetch_one("SELECT r FROM _r")
+# row["r"] 是 rsqlx.Range，含 .start / .end / .include_start / .include_end
+```
+
+- `start=None` / `end=None` 表示无界。支持的元素类型：`int`、`Decimal`、`date`、`datetime`（对应 PG 的 `INT4RANGE`/`INT8RANGE`/`NUMRANGE`/`DATERANGE`/`TSRANGE`/`TSTZRANGE`）。
+- 读取 range 列会自动解码为 `rsqlx.Range`。
+- PostgreSQL 会规范化离散区间（如 `[10,20]` → `[10,21)`），rsqlx 如实返回规范化后的值。
+- MySQL / SQLite 无原生区间类型；传入 `Range` 会绑定为 NULL。
+
 ### 返回值类型映射
 
 | 数据库类型 | Python 类型 |
@@ -285,6 +302,7 @@ rows = await pool.fetch("SELECT items FROM docs")
 | PG INET / CIDR / MACADDR / BIT / VARBIT / TIMETZ | `str` |
 | PG INTERVAL | `dict{months, days, microseconds}` |
 | PG MONEY | `decimal.Decimal` |
+| PG range（INT4/8RANGE、NUMRANGE、DATE/TS/TSTZRANGE） | `rsqlx.Range` |
 | PG 数组 | `list`（保留 None 元素） |
 
 不支持的类型（如 PG 的 range、几何类型、自定义 domain/composite，MySQL 的 GEOMETRY）会抛 `InterfaceError`，可以在 SQL 里 `cast(col as text)` 取回字符串。完整类型矩阵与兼容性说明见 [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md)。

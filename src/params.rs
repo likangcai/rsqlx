@@ -38,6 +38,58 @@ pub enum PyParam {
     /// A homogeneous list of scalar values. Bound as a native array on
     /// PostgreSQL; serialized to JSON on MySQL / SQLite.
     Array(Vec<PyParam>),
+    /// An explicit PostgreSQL range value, created via `rsqlx.Range(...)`.
+    /// Bound as `PgRange<T>` where T is inferred from the element type.
+    Range {
+        start: Option<Box<PyParam>>,
+        end: Option<Box<PyParam>>,
+        include_start: bool,
+        include_end: bool,
+    },
+}
+
+/// Python wrapper for a PostgreSQL range value.  `None` bounds mean unbounded.
+#[pyclass(frozen, get_all)]
+pub struct Range {
+    pub start: Option<Py<PyAny>>,
+    pub end: Option<Py<PyAny>>,
+    pub include_start: bool,
+    pub include_end: bool,
+}
+
+#[pymethods]
+impl Range {
+    #[new]
+    #[pyo3(signature = (start=None, end=None, *, include_start=true, include_end=false))]
+    fn new(
+        start: Option<Py<PyAny>>,
+        end: Option<Py<PyAny>>,
+        include_start: bool,
+        include_end: bool,
+    ) -> Self {
+        Self {
+            start,
+            end,
+            include_start,
+            include_end,
+        }
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> String {
+        let lb = if self.include_start { '[' } else { '(' };
+        let rb = if self.include_end { ']' } else { ')' };
+        let s = self
+            .start
+            .as_ref()
+            .map(|v| v.bind(py).repr().map(|r| r.to_string()).unwrap_or_default())
+            .unwrap_or_default();
+        let e = self
+            .end
+            .as_ref()
+            .map(|v| v.bind(py).repr().map(|r| r.to_string()).unwrap_or_default())
+            .unwrap_or_default();
+        format!("{lb}{s}, {e}{rb}")
+    }
 }
 
 /// Python wrapper that marks a list of JSON values to be bound as a native
@@ -193,6 +245,28 @@ pub fn py_to_param(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyParam> 
                 })
         }
         _ => {
+            if obj.is_instance_of::<Range>() {
+                let r = obj.extract::<PyRef<Range>>()?;
+                let to_param = |v: &Option<Py<PyAny>>| -> PyResult<Option<Box<PyParam>>> {
+                    match v {
+                        None => Ok(None),
+                        Some(pyval) => {
+                            let bound = pyval.bind(py);
+                            if bound.is_none() {
+                                Ok(None)
+                            } else {
+                                Ok(Some(Box::new(py_to_param(py, &bound)?)))
+                            }
+                        }
+                    }
+                };
+                return Ok(PyParam::Range {
+                    start: to_param(&r.start)?,
+                    end: to_param(&r.end)?,
+                    include_start: r.include_start,
+                    include_end: r.include_end,
+                });
+            }
             if obj.is_instance_of::<JsonArray>() {
                 let arr = obj.extract::<PyRef<JsonArray>>()?;
                 return Ok(PyParam::JsonArray(arr.items.clone()));
