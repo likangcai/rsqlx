@@ -323,8 +323,13 @@ fn mysql_value_to_py<'py>(
                 None => Ok(py_none(py)),
             }
         }
-        "BINARY" | "VARBINARY" | "TINYBLOB" | "BLOB" | "MEDIUMBLOB" | "LONGBLOB" | "GEOMETRY"
-        | "BIT" => Ok(pyv!(py, opt!(row, i, Vec<u8>))),
+        "BIT" => Ok(pyv!(py, opt!(row, i, u64))),
+        "BINARY" | "VARBINARY" | "TINYBLOB" | "BLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
+            Ok(pyv!(py, opt!(row, i, Vec<u8>)))
+        }
+        // GEOMETRY has no sqlx Rust decoder; let it fall through to
+        // unsupported_type() with a clear message instead of a misleading
+        // "Vec<u8> vs GEOMETRY" decode error.
         "JSON" => match opt!(row, i, sqlx::types::Json<Value>) {
             Some(j) => json_to_py(py, &j.0),
             None => Ok(py_none(py)),

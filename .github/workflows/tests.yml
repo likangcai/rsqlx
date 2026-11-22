@@ -68,7 +68,7 @@ jobs:
       - name: Run SQLite tests
         run: |
           source .venv/bin/activate
-          python -m pytest tests/test_sqlite.py tests/test_api_friendly.py -v
+          python -m pytest tests/test_sqlite.py tests/test_api_friendly.py tests/test_edge_cases.py -v
 
       - name: Run PostgreSQL cross-validation
         env:
@@ -144,4 +144,4 @@ jobs:
           else
             source .venv/bin/activate
           fi
-          python -m pytest tests/test_sqlite.py tests/test_api_friendly.py -v
+          python -m pytest tests/test_sqlite.py tests/test_api_friendly.py tests/test_edge_cases.py -v

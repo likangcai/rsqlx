@@ -267,6 +267,7 @@ rsqlx.Error
 - Canceling a coroutine cancels the await, but the in-flight query runs to completion on the runtime
 - MySQL servers using DHE cipher suites (e.g. MySQL 8.0.16) are incompatible with rustls; add `?ssl-mode=disabled` to the connection URL
 - **SQLCipher is not supported**: rsqlx statically links standard SQLite (not SQLCipher), so encrypted SQLite databases cannot be opened. Upstream sqlx has a `bundled-sqlcipher` feature, but enabling it would replace the bundled SQLite engine and require building vendored OpenSSL, which conflicts with rsqlx's zero-system-dependency guarantee and cross-platform CI. If you need SQLCipher, use an external encrypted database or a dedicated SQLCipher client
+- **MySQL parameter-count mismatch**: passing the wrong number of parameters raises `rsqlx.InterfaceError`, but (due to sqlx's MySQL prepare-stage behavior) leaves one pooled connection busy. Calling `close()` on such a pool can hang. PostgreSQL and SQLite are unaffected. Always bind the correct number of parameters; this is treated as a user error in the SQL, not a driver defect
 
 ## Migrating from pymysql
 

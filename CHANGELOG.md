@@ -17,6 +17,10 @@
 - 核心测试支持 `RSQLX_TEST_*_URL` 同时接受原生 DSN 与 SQLAlchemy `+rsqlx` URL 格式，消除两套测试的环境变量冲突
 - CI 新增 `live-db` job，使用 PostgreSQL 18 / MySQL 8 service containers 跑实库集成测试
 - 补充 `Pool.describe()` / `Transaction.describe()` 的三库行为测试（列名、别名、事务内描述），并将 `test_api_friendly.py` 纳入 `tests.yml` 的 Linux 与 Windows/macOS 两个 job
+- 新增 `tests/test_edge_cases.py` 深度边界测试（8 项）：PG 扩展数组（UUID/DATE/TIME/TIMESTAMP/TIMESTAMPTZ/NUMERIC/BYTEA/JSONB）、不支持类型报错、约束错误细分、迁移幂等；MySQL BIT/ENUM/SET/零日期/GEOMETRY、约束错误；连接池极限参数与超时触发
+- **修复 MySQL `BIT` 列解码错误**：此前 `BIT` 被误当作 bytes（`Vec<u8>`）解码，实际应按无符号整数（`u64`）读取，现返回 `int`
+- **修复 MySQL `GEOMETRY` 列的误导性解码错误**：sqlx 无对应 Rust 解码器，现明确抛出 `unsupported MySQL type 'GEOMETRY'` 的 `InterfaceError`（列为已知限制，见 README）
+- 记录 MySQL 参数个数不匹配会导致池连接占用、`close()` 可能挂起的已知限制（PG/SQLite 不受影响）
 
 ### 文档与元数据
 
