@@ -436,6 +436,13 @@ impl DbExt for Postgres {
             PyParam::Decimal(v) => q.bind(*v),
             PyParam::Uuid(v) => q.bind(*v),
             PyParam::Json(v) => q.bind(sqlx::types::Json(v.clone())),
+            PyParam::JsonArray(items) => {
+                let values: Vec<sqlx::types::Json<Value>> = items
+                    .iter()
+                    .map(|v| sqlx::types::Json(v.clone()))
+                    .collect();
+                q.bind(values)
+            }
             PyParam::Array(items) => pg_bind_array(q, items),
         }
     }
@@ -478,6 +485,9 @@ impl DbExt for Postgres {
             PyParam::Decimal(v) => { sep.push_bind(*v); }
             PyParam::Uuid(v) => { sep.push_bind(*v); }
             PyParam::Json(v) => { sep.push_bind(sqlx::types::Json(v.clone())); }
+            PyParam::JsonArray(items) => {
+                sep.push_bind(sqlx::types::Json(serde_json::Value::Array(items.clone())));
+            }
             PyParam::Array(items) => {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));
@@ -569,6 +579,7 @@ fn param_to_json_value(p: &PyParam) -> serde_json::Value {
         PyParam::DateTime(dt) => serde_json::Value::String(dt.to_string()),
         PyParam::DateTimeTz(dt) => serde_json::Value::String(dt.to_string()),
         PyParam::Json(v) => v.clone(),
+        PyParam::JsonArray(items) => serde_json::Value::Array(items.clone()),
         PyParam::Array(items) => serde_json::Value::Array(items.iter().map(param_to_json_value).collect()),
     }
 }
@@ -616,6 +627,9 @@ impl DbExt for MySql {
             PyParam::Decimal(v) => q.bind(*v),
             PyParam::Uuid(v) => q.bind(*v),
             PyParam::Json(v) => q.bind(sqlx::types::Json(v.clone())),
+            PyParam::JsonArray(items) => {
+                q.bind(sqlx::types::Json(serde_json::Value::Array(items.clone())))
+            }
             PyParam::Array(items) => {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 q.bind(sqlx::types::Json(json))
@@ -665,6 +679,9 @@ impl DbExt for MySql {
             PyParam::Decimal(v) => { sep.push_bind(*v); }
             PyParam::Uuid(v) => { sep.push_bind(*v); }
             PyParam::Json(v) => { sep.push_bind(sqlx::types::Json(v.clone())); }
+            PyParam::JsonArray(items) => {
+                sep.push_bind(sqlx::types::Json(serde_json::Value::Array(items.clone())));
+            }
             PyParam::Array(items) => {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));
@@ -698,6 +715,9 @@ impl DbExt for Sqlite {
             PyParam::Decimal(v) => q.bind(v.to_string()),
             PyParam::Uuid(v) => q.bind(v.to_string()),
             PyParam::Json(v) => q.bind(sqlx::types::Json(v.clone())),
+            PyParam::JsonArray(items) => {
+                q.bind(sqlx::types::Json(serde_json::Value::Array(items.clone())))
+            }
             PyParam::Array(items) => {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 q.bind(sqlx::types::Json(json))
@@ -743,6 +763,9 @@ impl DbExt for Sqlite {
             PyParam::Decimal(v) => { sep.push_bind(v.to_string()); }
             PyParam::Uuid(v) => { sep.push_bind(v.to_string()); }
             PyParam::Json(v) => { sep.push_bind(sqlx::types::Json(v.clone())); }
+            PyParam::JsonArray(items) => {
+                sep.push_bind(sqlx::types::Json(serde_json::Value::Array(items.clone())));
+            }
             PyParam::Array(items) => {
                 let json = serde_json::Value::Array(items.iter().map(param_to_json_value).collect());
                 sep.push_bind(sqlx::types::Json(json));

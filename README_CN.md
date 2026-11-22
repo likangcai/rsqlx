@@ -130,6 +130,13 @@ async def main():
         [["Carol", 28], ["Dave", 40]],
     )
 
+    # JSONB[] 数组需显式声明（普通 list[dict] 仍绑定为单个 jsonb 值）
+    await pool.execute("CREATE TEMP TABLE _json_demo (docs JSONB[])")
+    await pool.execute(
+        "INSERT INTO _json_demo VALUES ($1)",
+        [rsqlx.JsonArray([{"k": 1}, {"k": 2}, None])],
+    )
+
     await pool.close()
 
 asyncio.run(main())
@@ -218,7 +225,7 @@ Pool 和 Transaction 都支持 `async with`。
 
 ### 参数类型
 
-支持 None、bool、int、float、str、bytes/bytearray、datetime（naive 或 aware）、date、time、Decimal、UUID、dict/list/tuple（转 JSON）。超过 64 位的整数自动降级为 Decimal。纯标量的 list/tuple 在 PG 上绑定为原生数组，含 dict 或嵌套结构的绑定为 JSON。
+支持 None、bool、int、float、str、bytes/bytearray、datetime（naive 或 aware）、date、time、Decimal、UUID、dict/list/tuple（转 JSON）。超过 64 位的整数自动降级为 Decimal。纯标量的 list/tuple 在 PG 上绑定为原生数组，含 dict 或嵌套结构的绑定为单个 JSON 值。要显式绑定 PostgreSQL `JSONB[]` 数组，请使用 `rsqlx.JsonArray([...])`（在 MySQL/SQLite 上退化为普通 JSON 数组值）。
 
 ### 返回值类型映射
 

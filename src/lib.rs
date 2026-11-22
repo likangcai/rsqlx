@@ -74,6 +74,7 @@ fn rsqlx(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pool::Pool>()?;
     m.add_class::<pool::ExecuteResult>()?;
     m.add_class::<transaction::Transaction>()?;
+    m.add_class::<params::JsonArray>()?;
 
     m.add_function(wrap_pyfunction!(pool::connect, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

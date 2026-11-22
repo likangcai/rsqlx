@@ -8,6 +8,7 @@
 
 - `fetch` / `fetch_one` / `fetch_optional` / `fetch_raw` 增加可选 `row_factory` 参数，支持 `"dict"`（默认）、`"tuple"`、`"namedtuple"`；默认行为与 `list[dict]` 输出完全不变。为 SQLAlchemy 方言层提供 tuple 输出以避免 dict→tuple 转换开销
 - `Pool.describe(sql)` / `Transaction.describe(sql)`：返回语句列名但不拉取数据行，供框架适配层构造 DBAPI `description`；基于 sqlx `prepare()`，不启用额外 feature，也不重写 SQL
+- `rsqlx.JsonArray([...])`：显式将一组 JSON 值绑定为 PostgreSQL `JSONB[]`（mysql/sqlite 退化为普通 JSON 数组值）。普通 `list[dict]` 仍绑定为单个 jsonb 值，向后兼容；与上游 sqlx 的 `Vec<Json<T>>` 能力对齐
 - 新增独立的 `sqlalchemy-rsqlx` 方言包子项目（SQLAlchemy 2.0 async，支持 PG / MySQL / SQLite）
 
 ### 修复与验证

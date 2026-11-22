@@ -73,14 +73,59 @@ def test_pg_extended_arrays():
         assert row["nums"] == [decimal.Decimal("1.5"), None]
         assert row["bytes"] == [b"\x01\x02", None]
 
-        # JSON/JSONB arrays can be read (decoder supports them) even though
-        # binding a Python list of dicts binds as a single jsonb value.
+        # JSON/JSONB arrays can be read (decoder supports them) even though a
+        # plain Python list of dicts binds as one jsonb value; use the explicit
+        # JsonArray wrapper (test_pg_json_array_binding) to write JSONB[].
         jrow = await p.fetch_one(
             "SELECT ARRAY['{\"a\":1}'::jsonb, NULL] AS jbs, "
             "ARRAY['{\"b\":2}'::json] AS js"
         )
         assert jrow["jbs"] == [{"a": 1}, None]
         assert jrow["js"] == [{"b": 2}]
+        await p.close()
+
+    run(main())
+
+
+@needs_pg
+def test_pg_json_array_binding():
+    """JsonArray binds as JSONB[]; default list[dict] stays a single jsonb value."""
+    async def main():
+        p = await rsqlx.connect(PG_DSN, max_connections=2)
+        await p.execute("DROP TABLE IF EXISTS edge_pg_json")
+        await p.execute("CREATE TABLE edge_pg_json (id INT, arr JSONB[], single JSONB)")
+
+        # Default behaviour is unchanged: list[dict] -> one jsonb value.
+        await p.execute(
+            "INSERT INTO edge_pg_json (id, single) VALUES ($1, $2)",
+            [1, [{"a": 1}, {"b": 2}]],
+        )
+        assert (await p.fetch_one("SELECT single FROM edge_pg_json WHERE id=1"))["single"] == [
+            {"a": 1},
+            {"b": 2},
+        ]
+
+        # Explicit JsonArray -> native JSONB[] array.
+        assert repr(rsqlx.JsonArray([{"a": 1}])) == "JsonArray(1 items)"
+        await p.execute(
+            "INSERT INTO edge_pg_json (id, arr) VALUES ($1, $2)",
+            [2, rsqlx.JsonArray([{"a": 1}, {"b": 2}, None])],
+        )
+        assert (await p.fetch_one("SELECT arr FROM edge_pg_json WHERE id=2"))["arr"] == [
+            {"a": 1},
+            {"b": 2},
+            None,
+        ]
+
+        # Nested JSON values inside the array are preserved.
+        await p.execute(
+            "INSERT INTO edge_pg_json (id, arr) VALUES ($1, $2)",
+            [3, rsqlx.JsonArray([{"nested": {"x": 1}}, [1, 2, 3]])],
+        )
+        assert (await p.fetch_one("SELECT arr FROM edge_pg_json WHERE id=3"))["arr"] == [
+            {"nested": {"x": 1}},
+            [1, 2, 3],
+        ]
         await p.close()
 
     run(main())

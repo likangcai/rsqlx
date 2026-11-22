@@ -134,6 +134,13 @@ async def main():
         [["Carol", 28], ["Dave", 40]],
     )
 
+    # JSONB[] arrays: opt in explicitly (a plain list[dict] binds as one jsonb value)
+    await pool.execute("CREATE TEMP TABLE _json_demo (docs JSONB[])")
+    await pool.execute(
+        "INSERT INTO _json_demo VALUES ($1)",
+        [rsqlx.JsonArray([{"k": 1}, {"k": 2}, None])],
+    )
+
     await pool.close()
 
 asyncio.run(main())
@@ -225,7 +232,7 @@ backward-compatible; the row factory is chosen once per call, not per row.
 
 ### Parameter Types
 
-None, bool, int, float, str, bytes/bytearray, datetime (naive or aware), date, time, Decimal, UUID, dict/list/tuple (as JSON). Integers exceeding 64 bits degrade to Decimal. Homogeneous scalar lists/tuples bind as native PG arrays; lists containing dicts or nesting bind as JSON.
+None, bool, int, float, str, bytes/bytearray, datetime (naive or aware), date, time, Decimal, UUID, dict/list/tuple (as JSON). Integers exceeding 64 bits degrade to Decimal. Homogeneous scalar lists/tuples bind as native PG arrays; lists containing dicts or nesting bind as a single JSON value. To bind a PostgreSQL `JSONB[]` array explicitly, use `rsqlx.JsonArray([...])` (on MySQL/SQLite it degrades to a plain JSON array value).
 
 ### Row Type Mapping
 

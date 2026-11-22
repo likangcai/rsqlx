@@ -11,6 +11,7 @@ use std::str::FromStr;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyByteArray, PyBytes, PyDate, PyDateTime, PyDict, PyFloat, PyInt, PyList, PyString, PyTime, PyTuple};
+use pyo3::PyRef;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
@@ -31,9 +32,35 @@ pub enum PyParam {
     Uuid(uuid::Uuid),
     /// A JSON-encodable value (dict / nested / mixed list).
     Json(Value),
+    /// An explicit JSON array: binds as PostgreSQL JSONB[], as a plain JSON
+    /// array value on MySQL/SQLite. Created via `rsqlx.JsonArray([...])`.
+    JsonArray(Vec<Value>),
     /// A homogeneous list of scalar values. Bound as a native array on
     /// PostgreSQL; serialized to JSON on MySQL / SQLite.
     Array(Vec<PyParam>),
+}
+
+/// Python wrapper that marks a list of JSON values to be bound as a native
+/// PostgreSQL JSONB[] array instead of a single JSON value.
+#[pyclass(frozen)]
+pub struct JsonArray {
+    pub items: Vec<Value>,
+}
+
+#[pymethods]
+impl JsonArray {
+    #[new]
+    fn new(py: Python<'_>, items: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let mut out = Vec::new();
+        for item in items.try_iter()? {
+            out.push(py_to_json(py, &item?)?);
+        }
+        Ok(Self { items: out })
+    }
+
+    fn __repr__(&self) -> String {
+        format!("JsonArray({} items)", self.items.len())
+    }
 }
 
 /// True if a `PyParam` is a scalar that can live inside a PG array.
@@ -166,6 +193,10 @@ pub fn py_to_param(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<PyParam> 
                 })
         }
         _ => {
+            if obj.is_instance_of::<JsonArray>() {
+                let arr = obj.extract::<PyRef<JsonArray>>()?;
+                return Ok(PyParam::JsonArray(arr.items.clone()));
+            }
             if obj.is_instance_of::<PyDict>() || obj.is_instance_of::<PyList>() || obj.is_instance_of::<PyTuple>() {
                 // Try to treat homogeneous scalar lists/tuples as native PG arrays;
                 // fall back to JSON for dicts or mixed/nested structures.
