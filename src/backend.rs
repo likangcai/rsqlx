@@ -140,6 +140,25 @@ pub fn decimal_to_py<'py>(py: Python<'py>, d: &Decimal) -> PyResult<Bound<'py, P
     cls.call1((d.to_string(),))
 }
 
+/// Decode NUMERIC with rust_decimal first (the common case), falling back to
+/// BigDecimal for values exceeding rust_decimal's ~96-bit range.  Both map to
+/// Python's arbitrary-precision `decimal.Decimal` so the API is unchanged.
+fn numeric_to_py<'py>(py: Python<'py>, row: &PgRow, i: usize) -> PyResult<Bound<'py, PyAny>> {
+    match row.try_get::<Option<Decimal>, usize>(i) {
+        Ok(Some(d)) => return decimal_to_py(py, &d),
+        Ok(None) => return Ok(py_none(py)),
+        Err(_) => {}
+    }
+    match row.try_get::<Option<sqlx::types::BigDecimal>, usize>(i) {
+        Ok(Some(d)) => {
+            let cls = py.import("decimal")?.getattr("Decimal")?;
+            cls.call1((d.to_string(),))
+        }
+        Ok(None) => Ok(py_none(py)),
+        Err(e) => Err(crate::error::sqlx_to_py(e)),
+    }
+}
+
 pub fn uuid_to_py<'py>(py: Python<'py>, u: &uuid::Uuid) -> PyResult<Bound<'py, PyAny>> {
     let cls = py.import("uuid")?.getattr("UUID")?;
     cls.call1((u.to_string(),))
@@ -201,10 +220,7 @@ fn pg_value_to_py<'py>(
         "INT8" => Ok(pyv!(py, opt!(row, i, i64))),
         "FLOAT4" => Ok(pyv!(py, opt!(row, i, f32))),
         "FLOAT8" => Ok(pyv!(py, opt!(row, i, f64))),
-        "NUMERIC" => match opt!(row, i, Decimal) {
-            Some(d) => decimal_to_py(py, &d),
-            None => Ok(py_none(py)),
-        },
+        "NUMERIC" => numeric_to_py(py, row, i),
         "TEXT" | "NAME" | "VARCHAR" | "CHAR" | "\"CHAR\"" | "BPCHAR" | "UNKNOWN" => {
             match opt!(row, i, String) {
                 Some(s) => Ok(pyv!(py, s)),
@@ -225,6 +241,52 @@ fn pg_value_to_py<'py>(
         "TIMESTAMP" => Ok(pyv!(py, opt!(row, i, NaiveDateTime))),
         "TIMESTAMPTZ" => Ok(pyv!(py, opt!(row, i, DateTime<FixedOffset>))),
         "VOID" => Ok(py_none(py)),
+
+        // Types enabled via optional sqlx features.  Return pragmatic Python
+        // representations: OID -> int, CITEXT -> str, network/MAC/bit/timetz
+        // -> str, MONEY -> Decimal (assuming 2 fractional digits), INTERVAL ->
+        // dict with months/days/microseconds.
+        "OID" => match opt!(row, i, sqlx::postgres::types::Oid) {
+            Some(v) => Ok(pyv!(py, v.0)),
+            None => Ok(py_none(py)),
+        },
+        "citext" => Ok(pyv!(py, opt!(row, i, String))),  // extension type: lowercase name
+        "INET" | "CIDR" => match opt!(row, i, sqlx::types::ipnet::IpNet) {
+            Some(v) => Ok(pyv!(py, v.to_string())),
+            None => Ok(py_none(py)),
+        },
+        "MACADDR" => match opt!(row, i, sqlx::types::mac_address::MacAddress) {
+            Some(v) => Ok(pyv!(py, v.to_string())),
+            None => Ok(py_none(py)),
+        },
+        "BIT" | "VARBIT" => match opt!(row, i, sqlx::types::BitVec) {
+            Some(v) => {
+                let s: String = v.iter().map(|b| if b { '1' } else { '0' }).collect();
+                Ok(pyv!(py, s))
+            }
+            None => Ok(py_none(py)),
+        },
+        "MONEY" => match opt!(row, i, sqlx::postgres::types::PgMoney) {
+            Some(v) => {
+                let d = v.to_decimal(2);
+                decimal_to_py(py, &d)
+            }
+            None => Ok(py_none(py)),
+        },
+        "INTERVAL" => match opt!(row, i, sqlx::postgres::types::PgInterval) {
+            Some(v) => {
+                let dict = PyDict::new(py);
+                dict.set_item("months", v.months)?;
+                dict.set_item("days", v.days)?;
+                dict.set_item("microseconds", v.microseconds)?;
+                Ok(dict.into_any())
+            }
+            None => Ok(py_none(py)),
+        },
+        "TIMETZ" => match opt!(row, i, sqlx::postgres::types::PgTimeTz<NaiveTime, FixedOffset>) {
+            Some(v) => Ok(pyv!(py, format!("{}{}", v.time, v.offset))),
+            None => Ok(py_none(py)),
+        },
 
         // arrays
         "BOOL[]" => arr!(row, i, py, bool),

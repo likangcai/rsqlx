@@ -21,23 +21,23 @@ Python 动态类型与 Rust 静态类型的映射边界，而非 sqlx 能力缺�
 | BOOL | `bool` | → `bool` | ✅ |
 | INT2 / INT4 / INT8 | i16 / i32 / i64 | → `int` | ✅ |
 | `"CHAR"`（单字节） | i8 | → `str`（落入字符串分支） | ⚠️ |
-| OID | `Oid` | 无分支，明确报错 | ❌ |
+| OID | `Oid` | → `int` | ✅ |
 | FLOAT4 / FLOAT8 | f32 / f64 | → `float` | ✅ |
-| NUMERIC | BigDecimal + rust_decimal | 仅 rust_decimal → `Decimal`；超 96 位精度不可表达 | ⚠️ |
+| NUMERIC | BigDecimal + rust_decimal | rust_decimal 优先，超范围回退 BigDecimal → Python `Decimal`（任意精度） | ✅ |
 | TEXT / VARCHAR / CHAR / NAME / BPCHAR / UNKNOWN | String | → `str` | ✅ |
-| CITEXT | `Citext` | 无分支，明确报错 | ❌ |
+| CITEXT | `Citext` | → `str`（需安装 citext 扩展） | ✅ |
 | BYTEA | `Vec<u8>` | → `bytes` | ✅ |
 | VOID | `()` | → `None` | ✅ |
 | UUID | `Uuid` | → `uuid.UUID`；UUID 对象可绑定 | ✅ |
 | JSON / JSONB | `Json<T>` / `Value` / `RawValue` | → `dict` / `list` / 标量；绑定 dict 为单个 jsonb | ✅ |
 | JSONB[] | `Vec<Json<T>>` | 读取 → `list`；写入用 `rsqlx.JsonArray([...])` | ✅（见第 4 节） |
 | DATE / TIME / TIMESTAMP / TIMESTAMPTZ | chrono / time 类型 | → `date` / `time` / naive / aware `datetime` | ✅ |
-| TIMETZ | `PgTimeTz` | 无分支，明确报错 | ❌ |
-| INTERVAL | `PgInterval` | 明确报错 | ❌ |
-| MONEY | `PgMoney` | 明确报错 | ❌ |
-| INET / CIDR | ipnet / ipnetwork | 明确报错 | ❌ |
-| MACADDR | mac_address | 明确报错 | ❌ |
-| BIT / VARBIT | bit_vec | 明确报错 | ❌ |
+| TIMETZ | `PgTimeTz` | → `str`（`HH:MM:SS+HH:MM`，保留时区） | ✅ |
+| INTERVAL | `PgInterval` | → `dict{months, days, microseconds}`（无损） | ✅ |
+| MONEY | `PgMoney` | → `Decimal`（按 2 位小数） | ⚠️ |
+| INET / CIDR | ipnet | → `str`（IpNet Display，如 `192.168.1.1/32`） | ✅ |
+| MACADDR | mac_address | → `str` | ✅ |
+| BIT / VARBIT | bit_vec | → `str`（位串 `'1010'`） | ✅ |
 | 几何（POINT / LINE / LSEG / BOX / PATH / POLYGON / CIRCLE 等） | PgCube 等 | 明确报错 | ❌ |
 | HSTORE / LTREE / LQUERY | PgHstore / PgLTree / PgLQuery | 明确报错 | ❌ |
 | range（INT4/8RANGE、TSRANGE、TSTZRANGE、DATERANGE、NUMRANGE） | Range<T> | 明确报错 | ❌ |
@@ -134,29 +134,22 @@ rows = await pool.fetch("SELECT items FROM docs")
 
 差异并非来自"sqlx 做不到"，而是四类原因叠加。按可补齐性排序：
 
-### 6.1 根因 A：sqlx 可选 feature 未启用（最容易补齐）
+### 6.1 根因 A：sqlx 可选 feature 未启用（**本版本已补齐**）
 
-sqlx 把若干类型放在**默认关闭的 feature** 后面：
+sqlx 把若干类型放在**默认关闭的 feature** 后面。本版本已在 `Cargo.toml` 启用
+`bigdecimal`、`ipnet`、`mac_address`、`bit-vec`、`time`，并在 `backend.rs` 加了解码分支：
 
 | sqlx feature | 对应类型 | rsqlx 现状 |
 |---|---|---|
-| `bigdecimal` | 任意精度 NUMERIC | 仅 `rust_decimal`（~96 位） |
-| `ipnet` / `ipnetwork` | PG INET / CIDR | 明确报错 |
-| `mac_address` | PG MACADDR | 明确报错 |
-| `bit-vec` | PG BIT / VARBIT | 明确报错 |
-| `time` | PG TIMETZ 等 time crate 类型 | 明确报错 |
+| `bigdecimal` | 任意精度 NUMERIC | rust_decimal 优先，超范围回退 BigDecimal → `Decimal` |
+| `ipnet` | PG INET / CIDR | → `str`（IpNet Display） |
+| `mac_address` | PG MACADDR | → `str` |
+| `bit-vec` | PG BIT / VARBIT | → `str`（位串） |
+| `time` | PG TIMETZ | → `str`（带时区） |
 
-**原因**：rsqlx 的 `Cargo.toml` 只启用了 `runtime-tokio`、`tls-rustls-ring`、
-三库驱动、`chrono`、`uuid`、`rust_decimal`、`migrate`、`json`，刻意保持依赖精简
-和 wheel 体积可控。
-
-**能否补齐**：可以，启用对应 feature + 在 `backend.rs` 加解码分支 + 定义 Python
-表示（如 `ipaddress.IPv4Address`、`decimal.Decimal`）。代价是：
-- 新增 Rust 依赖 → wheel 体积和编译时间增加
-- 需为每种类型设计 Python↔Rust 映射，并补三库对称测试
-
-**建议**：按用户需求分批启用。最高价值是 `bigdecimal`（精度问题影响财务场景）
-和 `ipnet`（网络地址常见于 PG）。
+**代价**：新增 5 个 Rust 依赖（`bigdecimal`、`ipnet`、`mac_address`、`bit-vec`、`time`），
+wheel 体积与编译时间增加；全部为纯 Rust crate，不引入系统依赖，不破坏零系统依赖承诺。
+OID / CITEXT / INTERVAL / MONEY 使用 sqlx 内置类型，无需额外 feature。
 
 ### 6.2 根因 B：Python 类型系统无直接对应（部分支持，可语义化补齐）
 
@@ -205,12 +198,12 @@ sqlx 把若干类型放在**默认关闭的 feature** 后面：
 
 | 优先级 | 项目 | 根因 | 补齐方式 | 风险 |
 |---|---|---|---|---|
-| P0 | PG `bigdecimal` 高精度 NUMERIC | A | 启用 feature + 映射 `Decimal` | 低（API 不变，仅扩展精度） |
-| P1 | PG INET / CIDR | A | 启用 `ipnet` + 映射 `ipaddress` | 中（新增依赖） |
+| ✅ 已完成 | PG `bigdecimal` 高精度 NUMERIC | A | 启用 feature + rust_decimal 优先/回退 BigDecimal | 低（API 不变） |
+| ✅ 已完成 | PG INET / CIDR | A | 启用 `ipnet` + 映射 `str` | 中（新增依赖） |
+| ✅ 已完成 | PG MACADDR / BIT / TIMETZ / CITEXT / OID / MONEY / INTERVAL | A | 启用 feature + 简单映射 | 低-中 |
 | P1 | MySQL TIME 全范围 | B | 返回 `timedelta` | 中（改变现有 TIME 返回类型，需评估兼容性） |
-| P2 | PG INTERVAL | B | 新增 `rsqlx.Interval` 类型 | 中（新 API） |
 | P2 | PG range | B | 新增 `rsqlx.Range` 类型 | 中（新 API） |
-| P2 | PG MACADDR / BIT / TIMETZ / CITEXT / OID / MONEY | A | 启用 feature + 简单映射 | 低-中 |
+| P2 | PG 几何 / HSTORE / LTREE / domain / composite | A/B | 需启用更多 feature + 设计 Python 表示 | 高（收益低，需求少见） |
 | P3 | SQLite JSON 自动解析 | C | 不补齐，用 `TypeDecorator` | — |
 | — | MySQL/SQLite UUID 还原 | C | 不补齐，用 `TypeDecorator` | — |
 | — | MySQL GEOMETRY / Rust 适配器 | D | 不补齐 | — |

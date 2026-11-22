@@ -288,9 +288,17 @@ Json<T>`) while keeping rsqlx's existing `list[dict]` behaviour intact.
 | TIME | `datetime.time` |
 | TIMESTAMP / DATETIME | naive `datetime.datetime` |
 | TIMESTAMPTZ | aware `datetime.datetime` |
+| PG OID | `int` |
+| PG CITEXT | `str` |
+| PG INET / CIDR / MACADDR / BIT / VARBIT / TIMETZ | `str` |
+| PG INTERVAL | `dict{months, days, microseconds}` |
+| PG MONEY | `decimal.Decimal` |
 | PG arrays of the above | `list` (None elements preserved) |
 
-Unsupported types (PG `INET`, `INTERVAL`, ranges, custom types) raise `InterfaceError` — cast in SQL (`SELECT col::text`) to retrieve as string.
+Unsupported types (e.g. PG ranges, geometric types, custom domain/composite types,
+MySQL GEOMETRY) raise `InterfaceError` — cast in SQL (`SELECT col::text`) to
+retrieve as string. See [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md) for
+the full type matrix and compatibility notes.
 
 ### Exceptions
 

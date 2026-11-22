@@ -274,9 +274,14 @@ rows = await pool.fetch("SELECT items FROM docs")
 | TIME | `datetime.time` |
 | TIMESTAMP / DATETIME | naive `datetime.datetime` |
 | TIMESTAMPTZ | aware `datetime.datetime`（带时区） |
+| PG OID | `int` |
+| PG CITEXT | `str` |
+| PG INET / CIDR / MACADDR / BIT / VARBIT / TIMETZ | `str` |
+| PG INTERVAL | `dict{months, days, microseconds}` |
+| PG MONEY | `decimal.Decimal` |
 | PG 数组 | `list`（保留 None 元素） |
 
-不支持的类型（PG 的 INET、INTERVAL、range、自定义类型等）会抛 `InterfaceError`，可以在 SQL 里 `cast(col as text)` 取回字符串。
+不支持的类型（如 PG 的 range、几何类型、自定义 domain/composite，MySQL 的 GEOMETRY）会抛 `InterfaceError`，可以在 SQL 里 `cast(col as text)` 取回字符串。完整类型矩阵与兼容性说明见 [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md)。
 
 ### 异常
 

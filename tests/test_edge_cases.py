@@ -132,15 +132,64 @@ def test_pg_json_array_binding():
 
 
 @needs_pg
+def test_pg_optional_feature_types():
+    """Types enabled via sqlx optional features now decode instead of erroring."""
+    async def main():
+        p = await rsqlx.connect(PG_DSN, max_connections=2)
+        try:
+            await p.execute("CREATE EXTENSION IF NOT EXISTS citext")
+            has_citext = True
+        except rsqlx.DatabaseError:
+            has_citext = False  # requires superuser; skip that case
+
+        cases = [
+            ("SELECT 123::oid AS v", 123),
+            ("SELECT 'hello'::citext AS v", "hello"),
+            ("SELECT '192.168.1.1'::inet AS v", "192.168.1.1/32"),
+            ("SELECT '10.0.0.0/8'::cidr AS v", "10.0.0.0/8"),
+            ("SELECT '00:11:22:33:44:55'::macaddr AS v", "00:11:22:33:44:55"),
+            ("SELECT B'1010'::bit(4) AS v", "1010"),
+            ("SELECT '12:34:56+02'::timetz AS v", None),
+        ]
+        for sql, expected in cases:
+            if "citext" in sql and not has_citext:
+                continue
+            row = await p.fetch_one(sql)
+            value = row["v"]
+            if expected is not None:
+                assert value == expected, f"{sql} -> {value!r} != {expected!r}"
+
+        money = (await p.fetch_one("SELECT 123.45::money AS v"))["v"]
+        assert isinstance(money, decimal.Decimal)
+        assert money == decimal.Decimal("123.45")
+
+        interval = (await p.fetch_one("SELECT interval '1 year 2 days 3 seconds' AS v"))["v"]
+        assert isinstance(interval, dict)
+        assert interval["months"] == 12
+        assert interval["days"] == 2
+        assert interval["microseconds"] == 3_000_000
+
+        big = (await p.fetch_one(
+            "SELECT '12345678901234567890123456789012345678901234567890.123456789'::numeric AS v"
+        ))["v"]
+        assert isinstance(big, decimal.Decimal)
+        # BigDecimal preserves PG's declared scale (trailing zeros); compare
+        # numerically rather than by string representation.
+        expected = decimal.Decimal("12345678901234567890123456789012345678901234567890.123456789")
+        assert big == expected
+
+        await p.close()
+
+    run(main())
+
+
+@needs_pg
 def test_pg_unsupported_types_error():
     async def main():
         p = await rsqlx.connect(PG_DSN, max_connections=2)
         cases = [
-            ("SELECT '1.2.3.4'::inet AS v", "INET"),
-            ("SELECT interval '1 day' AS v", "INTERVAL"),
             ("SELECT int4range(1, 5) AS v", "INT4RANGE"),
             ("SELECT point(1, 2) AS v", "POINT"),
-            ("SELECT 12.34::money AS v", "MONEY"),
         ]
         for sql, label in cases:
             with pytest.raises(rsqlx.InterfaceError):
