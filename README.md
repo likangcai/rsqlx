@@ -234,6 +234,44 @@ backward-compatible; the row factory is chosen once per call, not per row.
 
 None, bool, int, float, str, bytes/bytearray, datetime (naive or aware), date, time, Decimal, UUID, dict/list/tuple (as JSON). Integers exceeding 64 bits degrade to Decimal. Homogeneous scalar lists/tuples bind as native PG arrays; lists containing dicts or nesting bind as a single JSON value. To bind a PostgreSQL `JSONB[]` array explicitly, use `rsqlx.JsonArray([...])` (on MySQL/SQLite it degrades to a plain JSON array value).
 
+### Binding JSON arrays with `rsqlx.JsonArray`
+
+Python has no static type to distinguish a *single JSON array value* from an
+*array of JSON values*, so rsqlx keeps the backward-compatible default and
+offers an explicit wrapper:
+
+| Python value | Binds as | Target column |
+|---|---|---|
+| `{"k": 1}` | one jsonb object | `JSONB` |
+| `[{"k": 1}, {"k": 2}]` | **one jsonb array value** (default, unchanged) | `JSONB` |
+| `[1, 2, 3]` | native `INT4[]` (homogeneous scalars) | `INT4[]` / `NUMERIC[]` |
+| `rsqlx.JsonArray([{"k": 1}, {"k": 2}, None])` | native `JSONB[]` | `JSONB[]` |
+
+```python
+import rsqlx
+
+# PostgreSQL JSONB[] column
+await pool.execute("CREATE TEMP TABLE docs (items JSONB[])")
+await pool.execute(
+    "INSERT INTO docs VALUES ($1)",
+    [rsqlx.JsonArray([{"id": 1, "tags": ["a", "b"]}, {"id": 2}, None])],
+)
+rows = await pool.fetch("SELECT items FROM docs")
+# rows == [{"items": [{"id": 1, "tags": ["a", "b"]}, {"id": 2}, None]}]
+```
+
+Notes:
+- `JsonArray` accepts any JSON-serialisable items (dicts, lists, scalars,
+  `None`); nested structures are preserved.
+- On **MySQL / SQLite** there is no native JSON-array type, so `JsonArray`
+  degrades to a plain JSON array value — identical to passing a plain
+  `list[dict]`.
+- Reading `JSONB[]` / `JSON[]` columns works without the wrapper: rsqlx decodes
+  them into Python `list` (with `None` preserved).
+
+This mirrors upstream sqlx's `Vec<Json<T>>` binding (`PgHasArrayType for
+Json<T>`) while keeping rsqlx's existing `list[dict]` behaviour intact.
+
 ### Row Type Mapping
 
 | Database type | Python type |
@@ -395,6 +433,8 @@ git push origin v0.2.0
 | [README.md](README.md) | English: features, install, API reference, migration from pymysql |
 | [README_CN.md](README_CN.md) | 中文说明 |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Implementation internals, solved problems, packaging with maturin, PyPI publishing, installation |
+| [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md) | rsqlx vs upstream sqlx type support by database |
+| [SQLALCHEMY_DIALECT_DESIGN.md](docs/SQLALCHEMY_DIALECT_DESIGN.md) | SQLAlchemy 2.0 async dialect design |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 
 For implementation details or to publish a new release, see [DEVELOPMENT.md](DEVELOPMENT.md).

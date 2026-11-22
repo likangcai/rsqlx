@@ -227,6 +227,37 @@ Pool 和 Transaction 都支持 `async with`。
 
 支持 None、bool、int、float、str、bytes/bytearray、datetime（naive 或 aware）、date、time、Decimal、UUID、dict/list/tuple（转 JSON）。超过 64 位的整数自动降级为 Decimal。纯标量的 list/tuple 在 PG 上绑定为原生数组，含 dict 或嵌套结构的绑定为单个 JSON 值。要显式绑定 PostgreSQL `JSONB[]` 数组，请使用 `rsqlx.JsonArray([...])`（在 MySQL/SQLite 上退化为普通 JSON 数组值）。
 
+### 用 `rsqlx.JsonArray` 绑定 JSON 数组
+
+Python 没有静态类型区分"单个 JSON 数组值"和"由 JSON 值组成的数组"，因此 rsqlx 保持向后兼容的默认行为，并提供显式包装器：
+
+| Python 值 | 绑定为 | 目标列 |
+|---|---|---|
+| `{"k": 1}` | 单个 jsonb 对象 | `JSONB` |
+| `[{"k": 1}, {"k": 2}]` | **单个 jsonb 数组值**（默认，行为不变） | `JSONB` |
+| `[1, 2, 3]` | 原生 `INT4[]`（纯标量列表） | `INT4[]` / `NUMERIC[]` |
+| `rsqlx.JsonArray([{"k": 1}, {"k": 2}, None])` | 原生 `JSONB[]` | `JSONB[]` |
+
+```python
+import rsqlx
+
+# PostgreSQL JSONB[] 列
+await pool.execute("CREATE TEMP TABLE docs (items JSONB[])")
+await pool.execute(
+    "INSERT INTO docs VALUES ($1)",
+    [rsqlx.JsonArray([{"id": 1, "tags": ["a", "b"]}, {"id": 2}, None])],
+)
+rows = await pool.fetch("SELECT items FROM docs")
+# rows == [{"items": [{"id": 1, "tags": ["a", "b"]}, {"id": 2}, None]}]
+```
+
+说明：
+- `JsonArray` 接受任何可 JSON 序列化的元素（dict、list、标量、`None`），嵌套结构原样保留。
+- 在 **MySQL / SQLite** 上没有原生 JSON 数组类型，`JsonArray` 退化为普通 JSON 数组值——与直接传入 `list[dict]` 效果相同。
+- 读取 `JSONB[]` / `JSON[]` 列无需包装器：rsqlx 会解码为 Python `list`（保留 `None`）。
+
+这与上游 sqlx 的 `Vec<Json<T>>` 绑定能力对齐（`PgHasArrayType for Json<T>`），同时不改变现有 `list[dict]` 的行为。
+
 ### 返回值类型映射
 
 | 数据库类型 | Python 类型 |
@@ -436,6 +467,8 @@ git push origin v0.2.0
 | [README_CN.md](README_CN.md) | 本文件：功能介绍、安装、API 速查、类型映射、pymysql 迁移 |
 | [README.md](README.md) | English version |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 实现原理、踩坑记录、maturin 打包、PyPI 发布流程、用户安装 |
+| [TYPE_SUPPORT_MATRIX.md](docs/TYPE_SUPPORT_MATRIX.md) | rsqlx 与上游 sqlx 的三库类型支持对照 |
+| [SQLALCHEMY_DIALECT_DESIGN.md](docs/SQLALCHEMY_DIALECT_DESIGN.md) | SQLAlchemy 2.0 异步方言设计 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 
 想了解 rsqlx 内部是怎么实现的、或者要发布到 PyPI，看 [DEVELOPMENT.md](DEVELOPMENT.md)。
