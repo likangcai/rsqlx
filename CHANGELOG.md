@@ -2,7 +2,7 @@
 
 本项目记录 rsqlx 的版本变更。格式参考 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [0.9.3] - 2026-11-21
+## [0.9.4] - 2026-11-23
 
 ### 新增
 
@@ -34,7 +34,7 @@
 
 - 补充 GitHub 仓库地址 `https://github.com/likangcai/rsqlx`，Gitee 保留为镜像（README 中英版、`Cargo.toml`、`DEVELOPMENT.md`）
 - `pyproject.toml` 新增 `[project.urls]`，PyPI 项目页展示 Homepage / Repository / Gitee 镜像链接
-- 统一 `Cargo.toml` / `Cargo.lock` / `uv.lock` / `pyproject.toml` 版本号为 `0.9.3`，以便发布新版本让 PyPI 页面显示更新后的仓库链接。版本策略：主版本号与上游 sqlx 保持一致（同为 `0.9`），补丁版本允许有差异，不要求与 sqlx 严格对齐
+- 统一 `Cargo.toml` / `Cargo.lock` / `uv.lock` / `pyproject.toml` 版本号为 `0.9.4`，以便发布新版本让 PyPI 页面显示更新后的仓库链接。版本策略：主版本号与上游 sqlx 保持一致（同为 `0.9`），补丁版本允许有差异，不要求与 sqlx 严格对齐
 - 最低 Python 版本从 3.9 提升到 3.10：CI 矩阵去掉 3.9（Ubuntu 26.04 的 `actions/setup-python` 无 3.9 预构建），`requires-python` 同步改为 `>=3.10`，README / DEVELOPMENT 文档一致更新
 - 方言包依赖改为 `SQLAlchemy[asyncio]>=2.0.0,<3`，确保 greenlet 自动安装；兼容 SQLAlchemy 2.1 移除 `await_fallback` 的变更（回退到 `await_only`），已在 2.0.44 与 2.1.9 双版本跑通全部方言测试
 - CI 的 macOS runner 从已退役的 `macos-14` / `macos-13` 升级到 `macos-15` / `macos-15-intel`（GitHub 于 2026-11-02 退役 macOS 14 镜像），`build.yml` / `tests.yml` 与文档同步更新

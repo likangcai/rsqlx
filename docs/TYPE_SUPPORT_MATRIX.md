@@ -1,6 +1,6 @@
 # rsqlx 与上游 sqlx 类型支持对照
 
-本文档对照 **sqlx 0.9.0**（上游 Rust 库）与 **rsqlx 0.9.3**（Python 异步驱动）的类型支持。
+本文档对照 **sqlx 0.9.0**（上游 Rust 库）与 **rsqlx 0.9.4**（Python 异步驱动）的类型支持。
 rsqlx 是 sqlx 在 Python 侧的异步应用，不是 sqlx 源码的 fork；类型差异主要来自
 Python 动态类型与 Rust 静态类型的映射边界，而非 sqlx 能力缺失。
 

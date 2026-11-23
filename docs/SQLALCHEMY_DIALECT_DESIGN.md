@@ -18,7 +18,7 @@
 
 ```
 sqlalchemy_rsqlx/
-├── pyproject.toml                  # 独立发布：deps = rsqlx>=0.9.3, SQLAlchemy>=2.0
+├── pyproject.toml                  # 独立发布：deps = rsqlx>=0.9.4, SQLAlchemy>=2.0
 ├── README.md                       # 安装 / DSN / 支持矩阵 / 限制 / 与 asyncpg 差异
 ├── DESIGN.md                       # 指向 docs/SQLALCHEMY_DIALECT_DESIGN.md
 ├── sqlalchemy_rsqlx/

@@ -439,7 +439,7 @@ When you do need the source (debugging type mappings, understanding API changes)
 - sqlx patch (0.8.5 → 0.8.6): rsqlx patch (0.1.0 → 0.1.1)
 - sqlx minor (0.8 → 0.9): rsqlx minor (0.1 → 0.2)
 
-Only the major version needs to stay in sync with sqlx (currently `0.9` for both). Patch versions may differ — e.g. rsqlx `0.9.3` built on sqlx `0.9.0` is expected and does not need alignment. Keep `Cargo.toml`, `Cargo.lock`, `uv.lock` and `pyproject.toml` at the same rsqlx version.
+Only the major version needs to stay in sync with sqlx (currently `0.9` for both). Patch versions may differ — e.g. rsqlx `0.9.4` built on sqlx `0.9.0` is expected and does not need alignment. Keep `Cargo.toml`, `Cargo.lock`, `uv.lock` and `pyproject.toml` at the same rsqlx version.
 
 Update `version` in `Cargo.toml` and `pyproject.toml`, then:
 
