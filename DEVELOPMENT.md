@@ -373,6 +373,14 @@ if !url.contains("mode=") {
 
 > **通用教训**：本地测试通过不代表 CI 通过——CI 会装依赖的**最新版本**（如 SQLAlchemy 2.1.9），而本地可能停留在旧版。发布前应至少在最新依赖版本下跑一遍测试；本报告里多次出现"本地过、CI 挂"都是这个原因。
 
+### 坑 13：GitHub 退役 `macos-14` runner
+
+**现象**：macOS 构建 job 在排队阶段被拒，报 `The configuration 'macos-14-arm64-us-default' is not supported`，没有 runner 接单。
+
+**原因**：GitHub 于 2026-11-02 退役 macOS 14 hosted runner 镜像，旧的 `macos-14`（arm64）与 `macos-13`（Intel）标签都不再可用。
+
+**解法**：CI 里所有 `macos-14` → `macos-15`（Apple Silicon，用于 `aarch64-apple-darwin`），注释掉的 Intel 示例 `macos-13` → `macos-15-intel`；`build.yml` 与 `tests.yml` 同步修改，文档构建矩阵一并更新。
+
 ## 1.6 验证体系
 
 写完代码后的验证分四层，共 **215 项**：
@@ -592,8 +600,8 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 | Linux x86_64 musl | musllinux_1_2_x86_64 | `x86_64-unknown-linux-musl` | musllinux_1_2 | 3.10–3.13 |
 | Linux aarch64 musl | ubuntu-24.04-arm + musllinux_1_2_aarch64 | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.10–3.13 |
 | Windows x86_64 | windows-latest（原生） | `x86_64-pc-windows-msvc` | — | 3.10–3.13 |
-| macOS x86_64 | macos-13（原生） | `x86_64-apple-darwin` | — | 3.10–3.13 |
-| macOS arm64 | macos-14（原生） | `aarch64-apple-darwin` | — | 3.10–3.13 |
+| macOS x86_64 | macos-15-intel（原生） | `x86_64-apple-darwin` | — | 3.10–3.13 |
+| macOS arm64 | macos-15（原生） | `aarch64-apple-darwin` | — | 3.10–3.13 |
 | sdist | manylinux_2_28_x86_64 | 源码包 | — | — |
 
 > **aarch64 为什么用原生 arm64 runner 而不是从 x86_64 交叉编译？** 交叉编译时 maturin 需要目标架构（aarch64）的 Python 解释器，而 x86_64 的 manylinux 容器里只有 x86_64 Python，会导致产出的 wheel 嵌入错误的解释器而损坏。改用 `ubuntu-24.04-arm` + aarch64 容器后，构建是原生的，Python/工具链都是 aarch64，wheel 正确无误。
