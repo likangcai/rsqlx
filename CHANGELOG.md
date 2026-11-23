@@ -39,6 +39,10 @@
 - 方言包依赖改为 `SQLAlchemy[asyncio]>=2.0.0,<3`，确保 greenlet 自动安装；兼容 SQLAlchemy 2.1 移除 `await_fallback` 的变更（回退到 `await_only`），已在 2.0.44 与 2.1.9 双版本跑通全部方言测试
 - CI 的 macOS runner 从已退役的 `macos-14` / `macos-13` 升级到 `macos-15` / `macos-15-intel`（GitHub 于 2026-11-02 退役 macOS 14 镜像），`build.yml` / `tests.yml` 与文档同步更新
 
+### 下版本计划（0.9.5）
+
+- 恢复 macOS x86_64 Intel wheel 构建：`build.yml` 里 `macos-15-intel` + `x86_64-apple-darwin` 的 5 个 Python 版本条目目前在注释中（自 `45eae600` 起"临时禁用"，原 `macos-13` 已退役）。`macos-15-intel` 是当前 GitHub 官方支持的 Intel runner，构建脚本无需特殊处理；下版本取消注释并跑通完整构建矩阵后启用
+
 ## [0.9.0] - 2026-08-31
 
 对齐上游 sqlx 版本号，便于长期维护与对照。
