@@ -81,7 +81,7 @@ Detailed design: [`../docs/SQLALCHEMY_DIALECT_DESIGN.md`](../docs/SQLALCHEMY_DIA
 | `pool_recycle` | Mapped to rsqlx `max_lifetime` (seconds) |
 | `pool_pre_ping` | Implemented by SQLAlchemy via `SELECT 1` |
 | `connect_args` | Only `min_connections`, `max_connections`, `acquire_timeout`, `idle_timeout`, `max_lifetime` are accepted |
-| `async_fallback=True` | Uses `await_fallback`; intended for sync contexts only |
+| `async_fallback=True` | Intended for sync contexts only; uses `await_fallback` on SQLAlchemy 2.0 and falls back to `await_only` on 2.1+ (where `await_fallback` was removed) |
 
 Event-loop rule: all driver coroutines are awaited through SQLAlchemy's
 `await_only` greenlet bridge. Calling `asyncio.run()` inside the adapter is

@@ -17,7 +17,15 @@ from collections import deque
 from typing import Any, Deque, Iterable, Optional, Sequence
 
 import rsqlx
-from sqlalchemy.util.concurrency import await_fallback, await_only
+from sqlalchemy.util.concurrency import await_only
+
+try:
+    # `await_fallback` was removed in SQLAlchemy 2.1.  rsqlx is a pure-async
+    # driver, so the sync-fallback path is not meaningful for it; fall back to
+    # `await_only` on newer SQLAlchemy versions.
+    from sqlalchemy.util.concurrency import await_fallback
+except ImportError:  # SQLAlchemy >= 2.1
+    await_fallback = await_only
 
 # ---------------------------------------------------------------------------
 # DBAPI exception hierarchy

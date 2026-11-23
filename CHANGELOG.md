@@ -36,6 +36,7 @@
 - `pyproject.toml` 新增 `[project.urls]`，PyPI 项目页展示 Homepage / Repository / Gitee 镜像链接
 - 统一 `Cargo.toml` / `Cargo.lock` / `uv.lock` / `pyproject.toml` 版本号为 `0.9.3`，以便发布新版本让 PyPI 页面显示更新后的仓库链接。版本策略：主版本号与上游 sqlx 保持一致（同为 `0.9`），补丁版本允许有差异，不要求与 sqlx 严格对齐
 - 最低 Python 版本从 3.9 提升到 3.10：CI 矩阵去掉 3.9（Ubuntu 26.04 的 `actions/setup-python` 无 3.9 预构建），`requires-python` 同步改为 `>=3.10`，README / DEVELOPMENT 文档一致更新
+- 方言包依赖改为 `SQLAlchemy[asyncio]>=2.0.0,<3`，确保 greenlet 自动安装；兼容 SQLAlchemy 2.1 移除 `await_fallback` 的变更（回退到 `await_only`），已在 2.0.44 与 2.1.9 双版本跑通全部方言测试
 
 ## [0.9.0] - 2026-08-31
 
