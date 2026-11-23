@@ -4,7 +4,7 @@ rsqlx 是 **asyncio 原生驱动**（Rust/sqlx + PyO3），不是同步 DBAPI �
 psycopg2 的差异中，很大一部分是"同步 DBAPI vs 异步驱动"的范式差异，而非能力缺失。
 本文档区分三类：**范式差异（已有等价）**、**真实缺失**、**rsqlx 独有优势**。
 
-对标版本：pymysql 1.2.0 / psycopg2-binary 2.9.12 / rsqlx 0.9.4。
+对标版本：pymysql 1.2.0 / psycopg2-binary 2.9.12 / rsqlx 0.9.5。
 
 ---
 

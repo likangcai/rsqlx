@@ -25,10 +25,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-22.04
             container: quay.io/pypa/manylinux_2_28_x86_64
-            python: "3.10"
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-22.04
-            container: quay.io/pypa/manylinux_2_28_x86_64
             python: "3.11"
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-22.04
@@ -46,10 +42,6 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             container: quay.io/pypa/manylinux_2_28_aarch64
-            python: "3.10"
-            target: aarch64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            container: quay.io/pypa/manylinux_2_28_aarch64
             python: "3.11"
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
@@ -61,10 +53,6 @@ jobs:
             python: "3.13"
             target: aarch64-unknown-linux-gnu
           # ── Linux x86_64 musllinux (Alpine-compatible, musl libc) ──
-          - os: ubuntu-22.04
-            container: quay.io/pypa/musllinux_1_2_x86_64
-            python: "3.10"
-            target: x86_64-unknown-linux-musl
           - os: ubuntu-22.04
             container: quay.io/pypa/musllinux_1_2_x86_64
             python: "3.10"
@@ -89,9 +77,6 @@ jobs:
             python: "3.10"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
-            python: "3.10"
-            target: aarch64-unknown-linux-musl
-          - os: ubuntu-24.04-arm
             python: "3.11"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
@@ -105,9 +90,6 @@ jobs:
             python: "3.10"
             target: x86_64-pc-windows-msvc
           - os: windows-latest
-            python: "3.10"
-            target: x86_64-pc-windows-msvc
-          - os: windows-latest
             python: "3.11"
             target: x86_64-pc-windows-msvc
           - os: windows-latest
@@ -117,25 +99,19 @@ jobs:
             python: "3.13"
             target: x86_64-pc-windows-msvc
           # ── macOS x86_64 Intel (no container) ──
-#          - os: macos-15-intel
-#            python: "3.10"
-#            target: x86_64-apple-darwin
-#          - os: macos-15-intel
-#            python: "3.10"
-#            target: x86_64-apple-darwin
-#          - os: macos-15-intel
-#            python: "3.11"
-#            target: x86_64-apple-darwin
-#          - os: macos-15-intel
-#            python: "3.12"
-#            target: x86_64-apple-darwin
-#          - os: macos-15-intel
-#            python: "3.13"
-#            target: x86_64-apple-darwin
-          # ── macOS aarch64 Apple Silicon (no container) ──
-          - os: macos-15
+          - os: macos-15-intel
             python: "3.10"
-            target: aarch64-apple-darwin
+            target: x86_64-apple-darwin
+          - os: macos-15-intel
+            python: "3.11"
+            target: x86_64-apple-darwin
+          - os: macos-15-intel
+            python: "3.12"
+            target: x86_64-apple-darwin
+          - os: macos-15-intel
+            python: "3.13"
+            target: x86_64-apple-darwin
+          # ── macOS aarch64 Apple Silicon (no container) ──
           - os: macos-15
             python: "3.10"
             target: aarch64-apple-darwin

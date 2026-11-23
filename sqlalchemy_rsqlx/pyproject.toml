@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT OR Apache-2.0" }
 dependencies = [
-    "rsqlx>=0.9.4",
+    "rsqlx>=0.9.5",
     "SQLAlchemy[asyncio]>=2.0.0,<3",
 ]
 

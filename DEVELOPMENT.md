@@ -604,7 +604,7 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 | macOS arm64 | macos-15（原生） | `aarch64-apple-darwin` | — | 3.10–3.13 |
 | sdist | manylinux_2_28_x86_64 | 源码包 | — | — |
 
-> **macOS x86_64 (Intel) 当前状态**：上表中的 `macos-15-intel` 行在 `build.yml` 的 matrix 中**仍处于注释状态**（自 `45eae600` 起"临时禁用"，原因是当时的 `macos-13` 构建有问题）。`macos-15-intel` 是当前 GitHub 官方支持的 Intel runner，构建脚本无需特殊处理，技术上可行；计划在 0.9.5 取消注释、跑通完整构建矩阵后正式启用。当前版本不发布 x86_64-apple-darwin wheel。
+> **macOS x86_64 (Intel) 状态**：自 0.9.5 起，`macos-15-intel` 的 4 个 Python 版本（3.10–3.13）wheel 构建已正式启用，发布 `x86_64-apple-darwin` wheel。此前该段自 `45eae600` 起被注释（当时的 `macos-13` 构建有问题），GitHub 退役 macOS 13/14 后改用官方 `macos-15-intel` runner，构建脚本无需特殊处理。
 
 > **aarch64 为什么用原生 arm64 runner 而不是从 x86_64 交叉编译？** 交叉编译时 maturin 需要目标架构（aarch64）的 Python 解释器，而 x86_64 的 manylinux 容器里只有 x86_64 Python，会导致产出的 wheel 嵌入错误的解释器而损坏。改用 `ubuntu-24.04-arm` + aarch64 容器后，构建是原生的，Python/工具链都是 aarch64，wheel 正确无误。
 
