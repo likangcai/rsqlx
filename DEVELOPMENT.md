@@ -347,6 +347,32 @@ if !url.contains("mode=") {
 
 保持和 Python 标准库一致的行为，符合用户预期。
 
+### 坑 11：`actions/setup-python` 在 Ubuntu 26.04 上找不到 Python 3.9
+
+**现象**：CI 报 `The version '3.9' with architecture 'x64' was not found for Ubuntu 26.04`。
+
+**原因**：`ubuntu-latest` 滚动到 Ubuntu 26.04，而 `actions/python-versions` 的预构建清单还没有该系统的 Python 3.9。其他固定版本 runner（如 `ubuntu-22.04`）不受影响。
+
+**解法**：最低 Python 版本升到 3.10，CI 矩阵去掉 3.9；`requires-python` 同步改为 `>=3.10`，文档保持一致。这样可继续使用 `ubuntu-latest`，代价是不再验证 3.9 兼容性。若必须保留 3.9，可把 runner 固定为 `ubuntu-22.04`。
+
+### 坑 12：SQLAlchemy 2.1 移除 `await_fallback`、且 greenlet 不再隐式安装
+
+**现象**（CI 收集测试阶段报错）：
+- `ModuleNotFoundError: No module named 'greenlet'`
+- `cannot import name 'await_fallback' from 'sqlalchemy.util.concurrency'`
+
+**原因**：
+1. 方言包依赖写的是 `SQLAlchemy>=2.0.0,<3`，未带 `[asyncio]` extra，pip 不会自动装 greenlet；
+2. CI 装的是最新 SQLAlchemy 2.1.x，它移除了 `await_fallback`（本地 2.0.x 仍有），导致 `dbapi.py` 顶部 import 失败。
+
+**解法**：
+- 依赖改为 `SQLAlchemy[asyncio]>=2.0.0,<3`，保证 greenlet 随 SQLAlchemy 一起安装；
+- `dbapi.py` 用 `try/except ImportError` 可选导入 `await_fallback`，2.1+ 时回退到 `await_only`（rsqlx 是纯异步驱动，sync fallback 路径本就不适用）。
+
+两种方案均在 SQLAlchemy 2.0.44 与 2.1.9 上跑通全部方言测试（含 PG/MySQL 实库）。
+
+> **通用教训**：本地测试通过不代表 CI 通过——CI 会装依赖的**最新版本**（如 SQLAlchemy 2.1.9），而本地可能停留在旧版。发布前应至少在最新依赖版本下跑一遍测试；本报告里多次出现"本地过、CI 挂"都是这个原因。
+
 ## 1.6 验证体系
 
 写完代码后的验证分四层，共 **215 项**：
@@ -561,13 +587,13 @@ maturin build --release --target aarch64-unknown-linux-gnu --manylinux 2_28 --zi
 
 | 平台 | Runner / 容器 | 目标三元组 | 兼容性标签 | Python 版本 |
 |------|--------------|-----------|-----------|------------|
-| Linux x86_64 | manylinux_2_28_x86_64 | `x86_64-unknown-linux-gnu` | manylinux_2_28 | 3.9–3.13 |
-| Linux aarch64 | ubuntu-24.04-arm + manylinux_2_28_aarch64 | `aarch64-unknown-linux-gnu` | manylinux_2_28 | 3.9–3.13 |
-| Linux x86_64 musl | musllinux_1_2_x86_64 | `x86_64-unknown-linux-musl` | musllinux_1_2 | 3.9–3.13 |
-| Linux aarch64 musl | ubuntu-24.04-arm + musllinux_1_2_aarch64 | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.9–3.13 |
-| Windows x86_64 | windows-latest（原生） | `x86_64-pc-windows-msvc` | — | 3.9–3.13 |
-| macOS x86_64 | macos-13（原生） | `x86_64-apple-darwin` | — | 3.9–3.13 |
-| macOS arm64 | macos-14（原生） | `aarch64-apple-darwin` | — | 3.9–3.13 |
+| Linux x86_64 | manylinux_2_28_x86_64 | `x86_64-unknown-linux-gnu` | manylinux_2_28 | 3.10–3.13 |
+| Linux aarch64 | ubuntu-24.04-arm + manylinux_2_28_aarch64 | `aarch64-unknown-linux-gnu` | manylinux_2_28 | 3.10–3.13 |
+| Linux x86_64 musl | musllinux_1_2_x86_64 | `x86_64-unknown-linux-musl` | musllinux_1_2 | 3.10–3.13 |
+| Linux aarch64 musl | ubuntu-24.04-arm + musllinux_1_2_aarch64 | `aarch64-unknown-linux-musl` | musllinux_1_2 | 3.10–3.13 |
+| Windows x86_64 | windows-latest（原生） | `x86_64-pc-windows-msvc` | — | 3.10–3.13 |
+| macOS x86_64 | macos-13（原生） | `x86_64-apple-darwin` | — | 3.10–3.13 |
+| macOS arm64 | macos-14（原生） | `aarch64-apple-darwin` | — | 3.10–3.13 |
 | sdist | manylinux_2_28_x86_64 | 源码包 | — | — |
 
 > **aarch64 为什么用原生 arm64 runner 而不是从 x86_64 交叉编译？** 交叉编译时 maturin 需要目标架构（aarch64）的 Python 解释器，而 x86_64 的 manylinux 容器里只有 x86_64 Python，会导致产出的 wheel 嵌入错误的解释器而损坏。改用 `ubuntu-24.04-arm` + aarch64 容器后，构建是原生的，Python/工具链都是 aarch64，wheel 正确无误。
@@ -889,7 +915,7 @@ pip uninstall rsqlx
 **Q: `pip install rsqlx` 报 "No matching distribution found"**
 
 可能原因：
-- Python 版本不在 3.9–3.13 范围 → 升级/降级 Python，或从源码构建
+- Python 版本不在 3.10–3.13 范围 → 升级/降级 Python，或从源码构建
 - 平台架构没有预编译 wheel → 从源码构建：`pip install rsqlx --no-binary :all:`（需要 Rust）
 - PyPI 上还没发布该版本 → 检查 https://pypi.org/project/rsqlx/
 
