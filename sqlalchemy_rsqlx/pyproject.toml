@@ -7,7 +7,7 @@ name = "sqlalchemy-rsqlx"
 version = "0.1.0"
 description = "SQLAlchemy 2.0 async dialects for rsqlx (PostgreSQL / MySQL / SQLite)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT OR Apache-2.0" }
 dependencies = [
     "rsqlx>=0.9.3",

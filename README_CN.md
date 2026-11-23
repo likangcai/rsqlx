@@ -33,7 +33,7 @@ Rust 驱动的 Python 异步数据库客户端，底层基于 [sqlx](https://git
 | Windows 10+ | x86_64, ARM64 |
 | macOS 11+ | x86_64, arm64 |
 
-每个 (平台, 架构) 组合对应一个 wheel，兼容 CPython 3.9–3.13。
+每个 (平台, 架构) 组合对应一个 wheel，兼容 CPython 3.10–3.13。
 
 TLS 用的是 rustls + ring（纯 Rust 实现），不依赖系统的 OpenSSL 或 Schannel。SQLite 通过 libsqlite3-sys 静态链接进 wheel，用户侧零系统依赖。
 

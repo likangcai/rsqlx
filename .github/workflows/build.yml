@@ -21,7 +21,7 @@ jobs:
           # ── Linux x86_64 glibc (native in manylinux_2_28 container) ──
           - os: ubuntu-22.04
             container: quay.io/pypa/manylinux_2_28_x86_64
-            python: "3.9"
+            python: "3.10"
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-22.04
             container: quay.io/pypa/manylinux_2_28_x86_64
@@ -42,7 +42,7 @@ jobs:
           # ── Linux aarch64 glibc (native arm64 runner + aarch64 manylinux container) ──
           - os: ubuntu-24.04-arm
             container: quay.io/pypa/manylinux_2_28_aarch64
-            python: "3.9"
+            python: "3.10"
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             container: quay.io/pypa/manylinux_2_28_aarch64
@@ -63,7 +63,7 @@ jobs:
           # ── Linux x86_64 musllinux (Alpine-compatible, musl libc) ──
           - os: ubuntu-22.04
             container: quay.io/pypa/musllinux_1_2_x86_64
-            python: "3.9"
+            python: "3.10"
             target: x86_64-unknown-linux-musl
           - os: ubuntu-22.04
             container: quay.io/pypa/musllinux_1_2_x86_64
@@ -86,7 +86,7 @@ jobs:
           # upload-artifact) cannot run inside an Alpine container on arm64 runners.
           # maturin --zig links against musl natively on the arm64 runner instead.
           - os: ubuntu-24.04-arm
-            python: "3.9"
+            python: "3.10"
             target: aarch64-unknown-linux-musl
           - os: ubuntu-24.04-arm
             python: "3.10"
@@ -102,7 +102,7 @@ jobs:
             target: aarch64-unknown-linux-musl
           # ── Windows x86_64 (no container) ──
           - os: windows-latest
-            python: "3.9"
+            python: "3.10"
             target: x86_64-pc-windows-msvc
           - os: windows-latest
             python: "3.10"
@@ -118,7 +118,7 @@ jobs:
             target: x86_64-pc-windows-msvc
           # ── macOS x86_64 Intel (no container) ──
 #          - os: macos-13
-#            python: "3.9"
+#            python: "3.10"
 #            target: x86_64-apple-darwin
 #          - os: macos-13
 #            python: "3.10"
@@ -134,7 +134,7 @@ jobs:
 #            target: x86_64-apple-darwin
           # ── macOS aarch64 Apple Silicon (no container) ──
           - os: macos-14
-            python: "3.9"
+            python: "3.10"
             target: aarch64-apple-darwin
           - os: macos-14
             python: "3.10"

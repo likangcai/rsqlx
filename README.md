@@ -36,7 +36,7 @@ Pre-built wheels:
 | Windows 10+ | x86_64, ARM64 |
 | macOS 11+ | x86_64, arm64 |
 
-Each (platform, arch) wheel works for CPython 3.9–3.13.
+Each (platform, arch) wheel works for CPython 3.10–3.13.
 
 TLS: rustls + ring (pure Rust, no system OpenSSL). SQLite: statically linked via libsqlite3-sys. Zero system dependencies on the user side.
 

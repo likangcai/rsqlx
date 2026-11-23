@@ -490,7 +490,7 @@ build-backend = "maturin"
 [project]
 name = "rsqlx"
 version = "0.9.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 [tool.maturin]
 module-name = "rsqlx"
@@ -604,7 +604,7 @@ python -m zipfile -e dist/rsqlx-*.whl /tmp/wheel_check
 cat /tmp/wheel_check/rsqlx-0.9.0.dist-info/METADATA
 ```
 
-METADATA 里应该包含 `Requires-Python: >=3.9`、classifiers、作者信息 —— 这些都来自 `pyproject.toml`。
+METADATA 里应该包含 `Requires-Python: >=3.10`、classifiers、作者信息 —— 这些都来自 `pyproject.toml`。
 
 ## 2.5 sdist（源码分发）
 
@@ -647,7 +647,7 @@ name = "rsqlx"
 version = "0.9.0"
 description = "..."              # PyPI 列表页显示的一句话
 readme = "README.md"              # PyPI 项目页渲染的长文档
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT OR Apache-2.0" }
 authors = [{ name = "Yingzi", email = "yingzilkq@163.com" }]
 keywords = [...]
